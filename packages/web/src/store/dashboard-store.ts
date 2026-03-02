@@ -4,6 +4,20 @@ import type { Filters, ActiveTab, TimeScale } from '@useai/ui';
 import { SCALE_MS, ALL_SCALES } from '@useai/ui';
 import { apiFetch } from '../lib/api-client';
 
+/** Fetch all pages from a paginated API endpoint. */
+async function fetchAll<T>(path: string, pageSize = 500): Promise<T[]> {
+  const all: T[] = [];
+  let offset = 0;
+  while (true) {
+    const separator = path.includes('?') ? '&' : '?';
+    const page = await apiFetch<T[]>(`${path}${separator}limit=${pageSize}&offset=${offset}`);
+    all.push(...page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+  return all;
+}
+
 interface DashboardState {
   sessions: SessionSeal[];
   milestones: Milestone[];
@@ -39,8 +53,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   loadAll: async () => {
     try {
       const [sessions, milestones] = await Promise.all([
-        apiFetch<SessionSeal[]>('/api/sync/sessions'),
-        apiFetch<Milestone[]>('/api/milestones'),
+        fetchAll<SessionSeal>('/api/sync/sessions'),
+        fetchAll<Milestone>('/api/milestones'),
       ]);
       set({ sessions, milestones, loading: false });
     } catch {

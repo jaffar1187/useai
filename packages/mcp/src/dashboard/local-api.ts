@@ -14,6 +14,7 @@ import {
 } from '@useai/shared';
 import type { SessionSeal, Milestone, UseaiConfig } from '@useai/shared';
 import { reInjectAllInstructions } from '../tools.js';
+import { reconcileSessions, reconcileForSync } from '../reconcile.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
@@ -85,7 +86,8 @@ function calculateStreak(sessions: SessionSeal[]): number {
 
 export function handleLocalSessions(_req: IncomingMessage, res: ServerResponse): void {
   try {
-    const sessions = deduplicateSessions(readJson<SessionSeal[]>(SESSIONS_FILE, []));
+    const deduplicated = deduplicateSessions(readJson<SessionSeal[]>(SESSIONS_FILE, []));
+    const { sessions } = reconcileSessions(deduplicated);
     json(res, 200, sessions);
   } catch (err) {
     json(res, 500, { error: (err as Error).message });
@@ -96,7 +98,8 @@ export function handleLocalSessions(_req: IncomingMessage, res: ServerResponse):
 
 export function handleLocalStats(_req: IncomingMessage, res: ServerResponse): void {
   try {
-    const sessions = deduplicateSessions(readJson<SessionSeal[]>(SESSIONS_FILE, []));
+    const deduplicated = deduplicateSessions(readJson<SessionSeal[]>(SESSIONS_FILE, []));
+    const { sessions } = reconcileSessions(deduplicated);
 
     let totalSeconds = 0;
     let filesTouched = 0;
@@ -252,8 +255,10 @@ export async function performSync(): Promise<{ success: boolean; last_sync_at?: 
     'Authorization': `Bearer ${token}`,
   };
 
-  // Group sessions by date and build per-day sync payloads
-  const sessions = deduplicateSessions(readJson<SessionSeal[]>(SESSIONS_FILE, []));
+  // Reconcile sessions against sealed chains before syncing — prevents tampered data from leaving the machine.
+  // Sessions with corrupted chains are excluded from sync.
+  const deduplicated = deduplicateSessions(readJson<SessionSeal[]>(SESSIONS_FILE, []));
+  const { sessions } = reconcileForSync(deduplicated);
   const byDate = new Map<string, SessionSeal[]>();
 
   for (const s of sessions) {
@@ -304,28 +309,41 @@ export async function performSync(): Promise<{ success: boolean; last_sync_at?: 
   // Publish milestones (skip if milestones sync disabled)
   if (syncInclude.milestones) {
     const MILESTONE_CHUNK = 50;
-    const milestones = readJson<Milestone[]>(MILESTONES_FILE, []);
+    const allMilestones = readJson<Milestone[]>(MILESTONES_FILE, []);
 
-    // Strip private_titles from milestones if not included
-    const sanitizedMilestones = syncInclude.private_titles
-      ? milestones
-      : milestones.map(m => {
-          const { private_title: _, ...rest } = m;
-          return rest as Milestone;
+    // Only send milestones that haven't been published yet
+    const unpublished = allMilestones.filter(m => !m.published && m.title && m.category);
+
+    if (unpublished.length > 0) {
+      // Strip private_titles from milestones if not included
+      const sanitizedMilestones = syncInclude.private_titles
+        ? unpublished
+        : unpublished.map(m => {
+            const { private_title: _, ...rest } = m;
+            return rest as Milestone;
+          });
+
+      for (let i = 0; i < sanitizedMilestones.length; i += MILESTONE_CHUNK) {
+        const chunk = sanitizedMilestones.slice(i, i + MILESTONE_CHUNK);
+        const milestonesRes = await fetch(`${USEAI_API}/api/publish`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ milestones: chunk }),
         });
 
-    for (let i = 0; i < sanitizedMilestones.length; i += MILESTONE_CHUNK) {
-      const chunk = sanitizedMilestones.slice(i, i + MILESTONE_CHUNK);
-      const milestonesRes = await fetch(`${USEAI_API}/api/publish`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ milestones: chunk }),
-      });
-
-      if (!milestonesRes.ok) {
-        const errBody = await milestonesRes.text();
-        return { success: false, error: `Milestones publish failed (chunk ${Math.floor(i / MILESTONE_CHUNK) + 1}): ${milestonesRes.status} ${errBody}` };
+        if (!milestonesRes.ok) {
+          const errBody = await milestonesRes.text();
+          return { success: false, error: `Milestones publish failed (chunk ${Math.floor(i / MILESTONE_CHUNK) + 1}): ${milestonesRes.status} ${errBody}` };
+        }
       }
+
+      // Mark all synced milestones as published locally
+      const sentIds = new Set(unpublished.map(m => m.id));
+      const now = new Date().toISOString();
+      const updated = allMilestones.map(m =>
+        sentIds.has(m.id) ? { ...m, published: true, published_at: now } : m,
+      );
+      writeJson(MILESTONES_FILE, updated);
     }
   }
 
