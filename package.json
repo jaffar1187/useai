@@ -9,7 +9,6 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "dev:web": "turbo dev --filter=@useai/web",
     "dev:dashboard": "pnpm --filter @useai/dashboard run dev",
     "dev:daemon": "pnpm --filter @devness/useai run daemon",
     "dev:mcp": "turbo dev --filter=@devness/useai",

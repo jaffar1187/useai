@@ -4,4 +4,3 @@ packages:
   - packages/cli
   - packages/ui
   - packages/dashboard
-  - packages/web
