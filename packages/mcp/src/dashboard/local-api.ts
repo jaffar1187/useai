@@ -285,7 +285,7 @@ export async function performSync(): Promise<{ success: boolean; last_sync_at?: 
       clients,
       task_types: taskTypes,
       languages,
-      sessions: daySessions,
+      sessions: daySessions.map(({ prompt, prompt_images, ...rest }) => rest),
       sync_signature: '',
     };
 

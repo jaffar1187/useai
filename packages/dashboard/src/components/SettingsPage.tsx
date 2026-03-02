@@ -265,6 +265,8 @@ export function SettingsPage() {
                 description="How often to sync data"
                 value={String(draft.sync.interval_hours)}
                 options={[
+                  { value: '0.25', label: 'Every 15 minutes' },
+                  { value: '0.5', label: 'Every 30 minutes' },
                   { value: '1', label: 'Every hour' },
                   { value: '2', label: 'Every 2 hours' },
                   { value: '3', label: 'Every 3 hours' },

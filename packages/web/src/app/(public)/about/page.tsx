@@ -23,7 +23,7 @@ const PRINCIPLES = [
     icon: Shield,
     title: 'PRIVACY BY ARCHITECTURE',
     description:
-      'Zero network calls during coding. Your code, prompts, and AI responses never leave your machine. Only aggregate metrics are synced — and only when you choose.',
+      'Zero network calls during coding. Your code, prompts, and AI responses never leave your machine. Session metadata syncs automatically when logged in — disable anytime in Settings.',
   },
   {
     icon: Fingerprint,

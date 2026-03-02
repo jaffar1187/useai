@@ -58,6 +58,7 @@ import {
   handleDeleteConversation,
   handleDeleteMilestone,
   setOnConfigUpdated,
+  performSync,
 } from './local-api.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -583,6 +584,56 @@ describe('handleDeleteMilestone', () => {
     const res = createMockResponse();
     handleDeleteMilestone(createMockRequest() as IncomingMessage, res, 'nonexistent');
     expect(res._status).toBe(404);
+  });
+});
+
+describe('performSync', () => {
+  it('strips prompt and prompt_images from sync payload', async () => {
+    const sessions = [
+      makeSeal({
+        session_id: 'sess-sync-1',
+        prompt: 'Fix the auth bug in login.ts',
+        prompt_images: [{ type: 'image', description: 'screenshot of error' }],
+      }),
+      makeSeal({
+        session_id: 'sess-sync-2',
+        prompt: 'Add dark mode toggle',
+      }),
+    ];
+    writeJsonFile(sessionsFile, sessions);
+    writeJsonFile(milestonesFile, []);
+    writeJsonFile(configFile, {
+      auth: { token: 'tok_test', user: { id: 'u1', email: 'test@example.com' } },
+    });
+
+    // Capture the fetch call payloads
+    const fetchCalls: { url: string; body: string }[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = typeof url === 'string' ? url : url.toString();
+      if (init?.body) fetchCalls.push({ url: urlStr, body: init.body as string });
+      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }) as unknown as typeof fetch;
+
+    try {
+      const result = await performSync();
+      expect(result.success).toBe(true);
+
+      // Find the sync call (POST /api/sync)
+      const syncCall = fetchCalls.find(c => c.url.includes('/api/sync'));
+      expect(syncCall).toBeDefined();
+
+      const payload = JSON.parse(syncCall!.body);
+      for (const session of payload.sessions) {
+        expect(session).not.toHaveProperty('prompt');
+        expect(session).not.toHaveProperty('prompt_images');
+        // But other fields should still be present
+        expect(session).toHaveProperty('session_id');
+        expect(session).toHaveProperty('client');
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 

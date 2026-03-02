@@ -9,8 +9,8 @@ export const DEFAULT_CAPTURE_CONFIG: CaptureConfig = {
 };
 
 export const DEFAULT_SYNC_CONFIG: SyncConfig = {
-  enabled: false,
-  interval_hours: 3,
+  enabled: true,
+  interval_hours: 1,
 };
 
 export const DEFAULT_CONFIG: LocalConfig = {
@@ -19,6 +19,6 @@ export const DEFAULT_CONFIG: LocalConfig = {
   evaluation_framework: 'space',
 };
 
-export const DEFAULT_SYNC_INTERVAL_HOURS = 3;
+export const DEFAULT_SYNC_INTERVAL_HOURS = 1;
 
 export const GENESIS_HASH = 'GENESIS';

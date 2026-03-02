@@ -41,7 +41,7 @@ describe('Config migration integration', () => {
     const result = migrateConfig({ sync_interval_hours: 12 });
 
     expect(result.sync.interval_hours).toBe(12);
-    expect(result.sync.enabled).toBe(false); // default
+    expect(result.sync.enabled).toBe(true); // default
   });
 
   it('migrates all legacy fields together', () => {

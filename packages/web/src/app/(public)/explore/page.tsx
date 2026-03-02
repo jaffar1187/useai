@@ -481,7 +481,7 @@ export default function ExplorePage() {
               {
                 icon: Eye,
                 title: 'ZERO PAYLOAD',
-                description: 'No source code, file paths, class names, or prompt contents leave your machine. Only aggregate metrics and milestones are synced — if you choose to sync at all.',
+                description: 'No source code, file paths, class names, or prompt contents leave your machine. Only session metadata and milestones are synced when logged in — never your code or prompts.',
               },
               {
                 icon: Shield,

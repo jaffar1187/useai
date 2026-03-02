@@ -91,8 +91,8 @@ describe('Default config constants consistency', () => {
     expect(DEFAULT_SYNC_INTERVAL_HOURS).toBe(DEFAULT_SYNC_CONFIG.interval_hours);
   });
 
-  it('sync defaults are privacy-safe (no include config)', () => {
-    expect(DEFAULT_SYNC_CONFIG.enabled).toBe(false);
+  it('sync defaults are enabled with no include config', () => {
+    expect(DEFAULT_SYNC_CONFIG.enabled).toBe(true);
   });
 
   it('capture defaults are all enabled', () => {

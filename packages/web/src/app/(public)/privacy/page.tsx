@@ -29,11 +29,14 @@ const SESSION_FIELDS = [
   { field: 'files_touched', description: 'Count of files modified (number only, never file names)', synced: true, public: true },
   { field: 'title', description: 'Generic public description (no project names)', synced: true, public: true },
   { field: 'private_title', description: 'Detailed description (may include project names)', synced: true, public: false },
+  { field: 'prompt', description: 'Full verbatim prompt text (local-only)', synced: false, public: false },
+  { field: 'prompt_images', description: 'Image descriptions attached to prompt (local-only)', synced: false, public: false },
+  { field: 'evaluation', description: 'SPACE framework scores and improvement tips', synced: true, public: false },
 ];
 
 const NEVER_TRACKED = [
   'Your source code, diffs, patches, or snippets',
-  'Your prompts — what you ask the AI',
+  'Your prompts — stored locally only, never synced to the cloud',
   'AI responses — what the AI generates',
   'File names or paths — only the count of files touched',
   'Directory structure — no tree or layout information',
@@ -63,9 +66,9 @@ const DATA_CONTROLS = [
   },
   {
     icon: CloudOff,
-    title: 'NEVER SYNC',
+    title: 'DISABLE SYNC',
     command: null,
-    description: 'Simply don\'t run "useai login". The MCP server makes zero network calls unless you explicitly authenticate and sync.',
+    description: 'Turn off auto-sync in Settings, or simply don\'t log in. Without authentication, the MCP server makes zero network calls.',
   },
 ];
 
@@ -107,22 +110,24 @@ export default function PrivacyPage() {
           <div className="hud-border rounded-xl p-6 bg-bg-surface-1/80 mb-6">
             <p className="text-sm text-text-muted leading-relaxed mb-3">
               The UseAI MCP server writes to disk and makes <span className="text-text-primary font-bold">zero network calls</span> during
-              your coding sessions. Data only leaves your machine when you explicitly choose to sync by running{' '}
-              <code className="text-accent font-mono text-xs">useai sync</code>.
+              your coding sessions. When you authenticate and enable sync, whatever is captured locally is synced in full to
+              your private cloud dashboard — no partial or stripped data.
             </p>
             <p className="text-sm text-text-muted leading-relaxed">
               If you never authenticate (<code className="text-accent font-mono text-xs">useai login</code>),
               the MCP server operates entirely offline. All data stays in{' '}
               <code className="text-accent font-mono text-xs">~/.useai/</code> on your machine.
+              Individual sessions and milestones are <span className="text-text-primary font-bold">never publicly visible</span> — only
+              the authenticated owner sees them on their own cloud dashboard.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { icon: Eye, title: 'NO CODE ACCESS', description: 'UseAI never reads, transmits, or stores your source code.' },
-              { icon: Lock, title: 'NO PROMPTS', description: 'Your conversations with AI tools are never captured or stored.' },
+              { icon: Lock, title: 'NO PROMPTS SYNCED', description: 'Prompts are stored locally for your review but are never sent to the cloud.' },
               { icon: Shield, title: 'LOCAL FIRST', description: 'All processing happens on your machine. No cloud dependency.' },
-              { icon: Globe, title: 'OPT-IN SYNC', description: 'Data only leaves your machine when you explicitly choose.' },
+              { icon: Globe, title: 'SYNC CONTROL', description: 'Auto-sync is on by default when logged in. Turn it off anytime. Without login, everything stays local.' },
             ].map((item) => (
               <div key={item.title} className="hud-border rounded-xl p-5 bg-bg-surface-1/80 text-center">
                 <div className="w-10 h-10 rounded-lg bg-[var(--accent-alpha)] flex items-center justify-center border border-accent/20 mx-auto mb-3">
@@ -184,8 +189,8 @@ export default function PrivacyPage() {
             <p className="text-xs text-text-muted leading-relaxed mb-3">
               At the end of each session, the AI model self-assesses session quality using the SPACE framework.
               This includes scores (1-5) for prompt quality, context provided, independence level, and scope quality,
-              along with improvement tips for any dimension scored below 5. Evaluation data is synced when you choose
-              to sync but is never publicly visible.
+              along with improvement tips for any dimension scored below 5. Evaluation data is synced with session data
+              but is never publicly visible.
             </p>
             <h4 className="text-sm font-bold text-text-primary mb-3">Cryptographic Fields</h4>
             <p className="text-xs text-text-muted leading-relaxed">
@@ -278,13 +283,16 @@ export default function PrivacyPage() {
         <section className="mb-24">
           <div className="hud-border rounded-xl p-6 bg-bg-surface-1/80 mb-6">
             <p className="text-sm text-text-muted leading-relaxed mb-3">
-              Cloud sync is entirely <span className="text-text-primary font-bold">opt-in</span>. When you run{' '}
-              <code className="text-accent font-mono text-xs">useai sync</code>, full session records are sent to
-              the UseAI server. This includes all metadata fields above, including{' '}
-              <code className="text-accent font-mono text-xs">private_title</code> and{' '}
-              <code className="text-accent font-mono text-xs">project</code> name.
+              When you log in, auto-sync is <span className="text-text-primary font-bold">enabled by default</span> (every hour).
+              Full session records are sent to the UseAI server, including all metadata fields above —{' '}
+              <code className="text-accent font-mono text-xs">private_title</code>,{' '}
+              <code className="text-accent font-mono text-xs">project</code>, evaluations, and milestones.
+              There are no granular field-level toggles — sync is all-or-nothing.
+              Privacy controls belong on the <span className="text-text-primary font-bold">display side</span> (what appears on your public profile),
+              not the data collection side.
             </p>
             <p className="text-sm text-text-muted leading-relaxed mb-3">
+              You can disable auto-sync at any time in Settings, or simply don&apos;t log in to keep everything local.
               Sessions are deduplicated by <code className="text-accent font-mono text-xs">session_id</code> — syncing
               the same session twice will not create duplicates.
             </p>

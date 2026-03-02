@@ -225,7 +225,7 @@ export async function postSync(): Promise<{ success: boolean; last_sync_at?: str
       const res = await fetch('/cloud-api/api/sync', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ date, total_seconds: totalSeconds, clients, task_types: taskTypes, languages, sessions: daySessions, sync_signature: '' }),
+        body: JSON.stringify({ date, total_seconds: totalSeconds, clients, task_types: taskTypes, languages, sessions: daySessions.map(({ prompt, prompt_images, ...rest }) => rest), sync_signature: '' }),
       });
       if (!res.ok) throw new Error(`Sync failed (${date}): ${res.status}`);
     }
