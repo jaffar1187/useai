@@ -1,6 +1,6 @@
 {
   "name": "@devness/useai",
-  "version": "0.8.6",
+  "version": "0.8.8",
   "description": "Track your AI-assisted development workflow. MCP server that records usage metrics across all your AI tools.",
   "keywords": [
     "mcp",
@@ -48,7 +48,6 @@
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@types/node": "^22.13.4",
     "@useai/shared": "workspace:*",
-
     "smol-toml": "^1.6.0",
     "tsup": "^8.0.0",
     "typescript": "^5.7.3",
