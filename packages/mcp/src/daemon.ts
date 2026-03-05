@@ -82,6 +82,7 @@ let daemonSigningKey: KeyObject | null = null;
 // ── Orphan Recovery ─────────────────────────────────────────────────────────────
 
 const ORPHAN_SWEEP_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const MCP_STALE_CONNECTION_MS = 60 * 60 * 1000; // 1 hour — prune zombie MCP connections
 
 /** Get the set of UseAI session IDs that are currently active in memory. */
 function getActiveUseaiSessionIds(): Set<string> {
@@ -262,6 +263,49 @@ function sealOrphanedSessions(): void {
   }
 }
 
+/**
+ * Prune zombie MCP connections that have no active UseAI session and haven't
+ * had any activity for over 1 hour. Without this, StreamableHTTP connections
+ * (which lack a persistent socket to detect client departure) accumulate
+ * indefinitely and their parentStateStack entries block orphan sweep.
+ */
+function pruneZombieMcpConnections(): void {
+  const now = Date.now();
+  const toDelete: string[] = [];
+
+  for (const [sid, active] of sessions) {
+    // Keep connections that have an active UseAI session (recordCount > 0)
+    if (active.session.sessionRecordCount > 0) continue;
+
+    // Check last activity time — if the session was recently active, keep it
+    const idleMs = now - active.session.lastActivityTime;
+    if (idleMs < MCP_STALE_CONNECTION_MS) continue;
+
+    // Seal any orphaned parent sessions still on the stack before pruning
+    while (active.session.parentStateStack.length > 0) {
+      active.session.restoreParentState();
+      if (active.session.sessionRecordCount > 0 && !isSessionAlreadySealed(active.session)) {
+        autoSealSession(active);
+      }
+    }
+
+    toDelete.push(sid);
+  }
+
+  for (const sid of toDelete) {
+    const active = sessions.get(sid);
+    if (active) {
+      clearTimeout(active.idleTimer);
+      try { active.transport.close(); } catch { /* ignore */ }
+      sessions.delete(sid);
+    }
+  }
+
+  if (toDelete.length > 0) {
+    console.log(`Pruned ${toDelete.length} zombie MCP connection${toDelete.length === 1 ? '' : 's'}`);
+  }
+}
+
 // ── Auto-seal ──────────────────────────────────────────────────────────────────
 
 /** Check whether the UseAI session data has already been sealed (chain file moved to sealed/). */
@@ -421,6 +465,18 @@ function autoSealSession(active: ActiveSession): void {
 function sealSessionData(active: ActiveSession): void {
   const sealedId = active.session.sessionId;
   autoSealSession(active);
+
+  // Seal any parent sessions saved on the stack — these are orphaned sessions
+  // from nested useai_start calls where useai_end was never called.
+  // Without this, zombie MCP connections hold parent IDs that prevent orphan sweep
+  // from cleaning the corresponding active/ chain files.
+  while (active.session.parentStateStack.length > 0) {
+    active.session.restoreParentState();
+    if (active.session.sessionRecordCount > 0 && !isSessionAlreadySealed(active.session)) {
+      autoSealSession(active);
+    }
+  }
+
   active.session.reset(); // Ready for a new UseAI session
   // Remember what was sealed so useai_end can enrich it if called after the fact
   active.session.autoSealedSessionId = sealedId;
@@ -453,6 +509,15 @@ async function cleanupSession(sessionId: string): Promise<void> {
 
   clearTimeout(active.idleTimer);
   autoSealSession(active);
+
+  // Seal any orphaned parent sessions on the stack
+  while (active.session.parentStateStack.length > 0) {
+    active.session.restoreParentState();
+    if (active.session.sessionRecordCount > 0 && !isSessionAlreadySealed(active.session)) {
+      autoSealSession(active);
+    }
+  }
+
   try {
     await active.transport.close();
   } catch { /* ignore */ }
@@ -1138,8 +1203,11 @@ export async function startDaemon(port?: number): Promise<void> {
   // Seal any orphaned sessions left from a previous daemon crash/restart
   sealOrphanedSessions();
 
-  // Periodic orphan sweep (every 15 minutes)
-  const sweepInterval = setInterval(sealOrphanedSessions, ORPHAN_SWEEP_INTERVAL_MS);
+  // Periodic orphan sweep + zombie MCP connection pruning (every 15 minutes)
+  const sweepInterval = setInterval(() => {
+    pruneZombieMcpConnections();
+    sealOrphanedSessions();
+  }, ORPHAN_SWEEP_INTERVAL_MS);
   sweepInterval.unref();
 
   // Auto-sync timer: reschedule whenever config changes
@@ -1343,6 +1411,13 @@ export async function startDaemon(port?: number): Promise<void> {
               const active = sessions.get(closedSid)!;
               clearTimeout(active.idleTimer);
               autoSealSession(active);
+              // Seal any orphaned parent sessions on the stack
+              while (active.session.parentStateStack.length > 0) {
+                active.session.restoreParentState();
+                if (active.session.sessionRecordCount > 0 && !isSessionAlreadySealed(active.session)) {
+                  autoSealSession(active);
+                }
+              }
               sessions.delete(closedSid);
             }
           };

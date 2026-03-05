@@ -616,7 +616,17 @@ export function registerTools(server: McpServer, session: SessionState, opts?: R
       }
 
       const duration = session.getSessionDuration();
-      const now = new Date().toISOString();
+      // Cap ended_at to started_at + duration when the wall-clock span is much
+      // larger than the active duration. This happens when a parent session was
+      // paused overnight (saved on parentStateStack) and restored in the morning.
+      // Without this cap, ended_at uses the current wall-clock time, causing the
+      // dashboard timeline to render a multi-hour bar for an 8-minute session.
+      const wallClockMs = Date.now() - session.sessionStartTime;
+      const durationMs = duration * 1000;
+      const gapThresholdMs = 10 * 60 * 1000; // 10 min buffer
+      const now = wallClockMs > durationMs + gapThresholdMs
+        ? new Date(session.sessionStartTime + durationMs).toISOString()
+        : new Date().toISOString();
       const finalTaskType = task_type ?? session.sessionTaskType;
       const chainStartHash = session.chainTipHash === 'GENESIS' ? 'GENESIS' : session.chainTipHash;
 

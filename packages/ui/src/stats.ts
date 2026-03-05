@@ -412,10 +412,21 @@ export function getHourlyActivity(sessions: SessionSeal[], date: string): { hour
     const sStart = parseTimestamp(s.started_at);
     const sEnd = parseTimestamp(s.ended_at);
 
-    if (sEnd < dayStart || sStart > dayEnd) continue;
+    // Cap effective end to started_at + duration_seconds when the wall-clock span
+    // is much larger than the actual active duration. This prevents sessions that
+    // were paused overnight (e.g., parent session restored in the morning) from
+    // inflating the hourly chart with a multi-hour bar for a few minutes of work.
+    const durationMs = (s.duration_seconds ?? 0) * 1000;
+    const wallClockMs = sEnd - sStart;
+    const gapThresholdMs = 10 * 60 * 1000; // 10 min buffer
+    const effectiveEnd = durationMs > 0 && wallClockMs > durationMs + gapThresholdMs
+      ? sStart + durationMs
+      : sEnd;
+
+    if (effectiveEnd < dayStart || sStart > dayEnd) continue;
 
     const clampedStart = Math.max(sStart, dayStart);
-    const clampedEnd = Math.min(sEnd, dayEnd);
+    const clampedEnd = Math.min(effectiveEnd, dayEnd);
 
     for (let h = 0; h < 24; h++) {
       const hourStart = dayStart + h * 3600000;
