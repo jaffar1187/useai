@@ -281,9 +281,10 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
 
   const handleSignOut = useCallback(async () => {
     await postLogout();
+    onTabChange?.('sessions');
     onRefresh();
     setOpen(false);
-  }, [onRefresh]);
+  }, [onRefresh, onTabChange]);
 
   if (!config) return null;
 

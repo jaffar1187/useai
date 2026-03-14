@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, ChevronDown, ChevronRight, CloudUpload, LogIn, LogOut, CloudDownload, Clock, Eye } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronRight, CloudUpload, LogIn, LogOut, CloudDownload, Clock, Eye, Copy, Check, Download } from 'lucide-react';
 import type { SyncLogEntry } from '../lib/api';
 import { fetchLogs } from '../lib/api';
 
@@ -54,6 +54,7 @@ function formatTime(iso: string): string {
 function LogEntry({ entry }: { entry: SyncLogEntry }) {
   const [expanded, setExpanded] = useState(false);
   const [showPayload, setShowPayload] = useState(false);
+  const [copied, setCopied] = useState(false);
   const Icon = EVENT_ICONS[entry.event];
   const hasDetails = (entry.details && Object.keys(entry.details).length > 0) || !!entry.payload;
 
@@ -104,13 +105,49 @@ function LogEntry({ entry }: { entry: SyncLogEntry }) {
           {/* Payload viewer */}
           {entry.payload && (
             <div>
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowPayload(!showPayload); }}
-                className="flex items-center gap-1.5 text-[10px] font-medium text-accent/70 hover:text-accent transition-colors"
-              >
-                <Eye className="w-3 h-3" />
-                {showPayload ? 'Hide' : 'View'} exact data sent
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowPayload(!showPayload); }}
+                  className="flex items-center gap-1.5 text-[10px] font-medium text-accent/70 hover:text-accent transition-colors"
+                >
+                  <Eye className="w-3 h-3" />
+                  {showPayload ? 'Hide' : 'View'} exact data sent
+                </button>
+                {showPayload && (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(JSON.stringify(entry.payload!.body, null, 2));
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="flex items-center gap-1 text-[10px] font-medium text-text-muted hover:text-text-primary transition-colors"
+                      title="Copy to clipboard"
+                    >
+                      {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      {copied ? 'Copied' : 'Copy'}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const blob = new Blob([JSON.stringify(entry.payload!.body, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `log-${entry.event}-${new Date(entry.timestamp).toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="flex items-center gap-1 text-[10px] font-medium text-text-muted hover:text-text-primary transition-colors"
+                      title="Download as JSON"
+                    >
+                      <Download className="w-3 h-3" />
+                      Download
+                    </button>
+                  </>
+                )}
+              </div>
               {showPayload && (
                 <pre className="mt-1 bg-bg-base border border-border/40 rounded-md px-2.5 py-2 text-[10px] font-mono text-text-secondary overflow-x-auto max-h-80 overflow-y-auto whitespace-pre-wrap break-all leading-relaxed">
                   {JSON.stringify(entry.payload.body, null, 2)}
@@ -124,11 +161,14 @@ function LogEntry({ entry }: { entry: SyncLogEntry }) {
   );
 }
 
+const PAGE_SIZE = 30;
+
 export function LogsPage() {
   const [logs, setLogs] = useState<SyncLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<EventFilter>('all');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const load = () => {
     setLoading(true);
@@ -143,8 +183,13 @@ export function LogsPage() {
 
   useEffect(() => { load(); }, []);
 
+  // Reset visible count when filter changes
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [filter]);
+
   const filtered = filter === 'all' ? logs : logs.filter((l) => l.event === filter);
   const sorted = [...filtered].reverse(); // newest first
+  const visible = sorted.slice(0, visibleCount);
+  const hasMore = visibleCount < sorted.length;
 
   const eventTypes: EventFilter[] = ['all', 'sync', 'auto_sync', 'login', 'logout', 'cloud_pull'];
 
@@ -198,12 +243,24 @@ export function LogsPage() {
           </div>
         ) : (
           <div className="divide-y divide-border/30">
-            {sorted.map((entry) => (
+            {visible.map((entry) => (
               <LogEntry key={entry.id} entry={entry} />
             ))}
           </div>
         )}
       </section>
+
+      {/* Load more */}
+      {hasMore && (
+        <div className="text-center">
+          <button
+            onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+            className="px-4 py-1.5 rounded-md text-[11px] font-medium text-text-muted hover:text-text-primary bg-bg-surface-1 border border-border/50 hover:border-border transition-colors"
+          >
+            Show more ({sorted.length - visibleCount} remaining)
+          </button>
+        </div>
+      )}
     </div>
   );
 }

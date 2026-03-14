@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createHash } from 'node:crypto';
 import { existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -8,6 +9,7 @@ import {
   MILESTONES_FILE,
   CONFIG_FILE,
   SEALED_DIR,
+  SYNC_STATE_FILE,
   migrateConfig,
   isValidSessionSeal,
 } from '@useai/shared';
@@ -250,6 +252,29 @@ export function setOnConfigUpdated(cb: () => void): void {
 
 // ── Sync ────────────────────────────────────────────────────────────────────────
 
+// ── Sync State (incremental sync) ────────────────────────────────────────────
+
+interface SyncDateState {
+  hash: string;         // SHA-256 of sorted session_ids
+  count: number;        // session count for quick comparison
+  synced_at: string;
+}
+
+interface SyncState {
+  dates: Record<string, SyncDateState>;
+  config_hash: string;  // hash of sync-relevant config — invalidates all dates on change
+}
+
+function hashSessionIds(sessions: SessionSeal[]): string {
+  const ids = sessions.map(s => s.session_id).sort();
+  return createHash('sha256').update(ids.join(',')).digest('hex');
+}
+
+function hashSyncConfig(config: UseaiConfig): string {
+  const relevant = { include_details: config.sync.include_details, include_stats: config.sync.include_stats };
+  return createHash('sha256').update(JSON.stringify(relevant)).digest('hex');
+}
+
 /** Core sync logic — reusable from both the HTTP handler and the auto-sync timer. */
 export async function performSync(eventType: 'sync' | 'auto_sync' = 'sync'): Promise<{ success: boolean; last_sync_at?: string; error?: string }> {
   const raw = readJson<Record<string, unknown>>(CONFIG_FILE, {});
@@ -279,7 +304,24 @@ export async function performSync(eventType: 'sync' | 'auto_sync' = 'sync'): Pro
     else byDate.set(date, [s]);
   }
 
+  // ── Incremental sync: only send dates that changed ─────────────────────────
+  const syncState = readJson<SyncState>(SYNC_STATE_FILE, { dates: {}, config_hash: '' });
+  const currentConfigHash = hashSyncConfig(config);
+  const configChanged = syncState.config_hash !== currentConfigHash;
+
+  let datesSynced = 0;
+  let datesSkipped = 0;
+  let sessionsSynced = 0;
+
   for (const [date, daySessions] of byDate) {
+    // Check if this date needs syncing
+    const dateHash = hashSessionIds(daySessions);
+    const prev = syncState.dates[date];
+    if (!configChanged && prev && prev.hash === dateHash && prev.count === daySessions.length) {
+      datesSkipped++;
+      continue;
+    }
+
     let totalSeconds = 0;
     const clients: Record<string, number> = {};
     const taskTypes: Record<string, number> = {};
@@ -327,8 +369,16 @@ export async function performSync(eventType: 'sync' | 'auto_sync' = 'sync'): Pro
       const errBody = await sessionsRes.text();
       const error = `Sessions sync failed (${date}): ${sessionsRes.status} ${errBody}`;
       addLogEntry({ event: eventType, status: 'error', message: error, details: { error } });
+      // Save partial progress before returning
+      syncState.config_hash = currentConfigHash;
+      writeJson(SYNC_STATE_FILE, syncState);
       return { success: false, error };
     }
+
+    // Mark this date as synced
+    syncState.dates[date] = { hash: dateHash, count: daySessions.length, synced_at: new Date().toISOString() };
+    datesSynced++;
+    sessionsSynced += daySessions.length;
   }
 
   // Publish milestones (skip when details are excluded)
@@ -378,18 +428,28 @@ export async function performSync(eventType: 'sync' | 'auto_sync' = 'sync'): Pro
     }
   }
 
+  // Save sync state
+  syncState.config_hash = currentConfigHash;
+  writeJson(SYNC_STATE_FILE, syncState);
+
   // Update last_sync_at
   const now = new Date().toISOString();
   config.last_sync_at = now;
   writeJson(CONFIG_FILE, config);
 
+  const parts: string[] = [];
+  if (datesSynced > 0) parts.push(`${sessionsSynced} session${sessionsSynced !== 1 ? 's' : ''} across ${datesSynced} date${datesSynced !== 1 ? 's' : ''}`);
+  if (datesSkipped > 0) parts.push(`${datesSkipped} date${datesSkipped !== 1 ? 's' : ''} unchanged`);
+  if (milestonesPublished > 0) parts.push(`${milestonesPublished} milestone${milestonesPublished !== 1 ? 's' : ''}`);
+
   addLogEntry({
     event: eventType,
     status: 'success',
-    message: `Synced ${sessions.length} session${sessions.length !== 1 ? 's' : ''} across ${byDate.size} date${byDate.size !== 1 ? 's' : ''}${milestonesPublished ? `, ${milestonesPublished} milestone${milestonesPublished !== 1 ? 's' : ''}` : ''}`,
+    message: parts.length > 0 ? `Synced: ${parts.join(', ')}` : 'Nothing to sync — all up to date',
     details: {
-      sessions_synced: sessions.length,
-      dates_synced: byDate.size,
+      sessions_synced: sessionsSynced,
+      dates_synced: datesSynced,
+      dates_skipped: datesSkipped,
       milestones_published: milestonesPublished,
     },
   });
