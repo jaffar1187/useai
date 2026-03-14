@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import type { LocalConfig } from '../lib/api';
 import { postSendOtp, postVerifyOtp, postSync, postLogout, checkUsername, updateUsername } from '../lib/api';
-import { RefreshCw, User, Mail, LogOut, Link, Pencil, Loader2, Check, X, ChevronDown, ScrollText } from 'lucide-react';
+import { RefreshCw, User, Mail, LogOut, Link, Pencil, Loader2, Check, X, ChevronDown, ScrollText, HelpCircle } from 'lucide-react';
 import type { ActiveTab } from '@useai/ui';
 
 const USERNAME_REGEX = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
@@ -373,6 +373,13 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
                 >
                   <ScrollText className="w-3.5 h-3.5" />
                   Sync logs
+                </button>
+                <button
+                  onClick={() => { onTabChange?.('faqs'); setOpen(false); }}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-bg-surface-2 transition-colors cursor-pointer"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  FAQs
                 </button>
                 <button
                   onClick={handleSignOut}

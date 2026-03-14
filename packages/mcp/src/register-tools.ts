@@ -266,6 +266,7 @@ export function registerTools(server: McpServer, session: SessionState, opts?: R
       'Do NOT call this on turns that only contain system reminders, hook feedback, plan approval clicks, or other automated/system-generated content with no user-authored text. ' +
       'Generate a session title from the user\'s prompt: a generic public "title" (no project/file names) ' +
       'and a detailed "private_title" (can include specifics). ' +
+      'SECURITY: NEVER include API keys, tokens, passwords, env var values, secrets, or confidential data in title or private_title — describe the intent, not the value. ' +
       'task_type must be one of: coding, debugging, testing, planning, reviewing, documenting, learning, ' +
       'deployment, devops, research, migration, design, data, security, configuration, code_review, ' +
       'code-review, investigation, infrastructure, analysis, ops, setup, refactoring, other.',
@@ -276,11 +277,11 @@ export function registerTools(server: McpServer, session: SessionState, opts?: R
       title: z
         .string()
         .optional()
-        .describe('Short public session title derived from the user\'s prompt. No project names, file paths, or identifying details. Example: "Fix authentication bug"'),
+        .describe('Short public session title derived from the user\'s prompt. No project names, file paths, or identifying details. NEVER include API keys, tokens, passwords, secrets, or confidential values. Example: "Fix authentication bug"'),
       private_title: z
         .string()
         .optional()
-        .describe('Detailed session title for private records. Can include project names and specifics. Example: "Fix JWT refresh in UseAI login flow"'),
+        .describe('Detailed session title for private records. Can include project names and specifics. NEVER include API keys, tokens, passwords, secrets, or confidential values — describe the intent, not the value. Example: "Fix JWT refresh in UseAI login flow"'),
       project: z
         .string()
         .optional()
@@ -479,8 +480,8 @@ export function registerTools(server: McpServer, session: SessionState, opts?: R
         .optional()
         .describe('Approximate number of files created or modified (count only, no names)'),
       milestones: coerceJsonString(z.array(z.object({
-        title: z.string().describe("PRIVACY-CRITICAL: Generic description of what was accomplished. NEVER include project names, file paths, class names, or identifying details. GOOD: 'Implemented user authentication'. BAD: 'Fixed bug in Acme auth'."),
-        private_title: z.string().optional().describe("Detailed description for the user's private records. CAN include project names and specifics."),
+        title: z.string().describe("PRIVACY-CRITICAL: Generic description of what was accomplished. NEVER include project names, file paths, class names, identifying details, API keys, tokens, passwords, secrets, or confidential values. GOOD: 'Implemented user authentication'. BAD: 'Fixed bug in Acme auth'."),
+        private_title: z.string().optional().describe("Detailed description for the user's private records. CAN include project names and specifics. NEVER include API keys, tokens, passwords, secrets, or confidential values — describe the intent, not the value."),
         category: milestoneCategorySchema.describe('Required. Type of work: feature, bugfix, refactor, test, docs, investigation, analysis, research, setup, deployment, performance, cleanup, chore, security, migration, design, devops, config, other'),
         complexity: complexitySchema.optional().describe('Optional. simple, medium, or complex. Defaults to medium.'),
       }))).optional().describe('Array of milestone objects. Each MUST have "title" (generic, no project names) and "category". Optional: "private_title" (detailed, can include project names). Example: [{"title": "Implemented auth flow", "private_title": "Added OAuth2 to UserService in acme-api", "category": "feature"}]'),

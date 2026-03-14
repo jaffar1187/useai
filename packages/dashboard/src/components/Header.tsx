@@ -80,7 +80,9 @@ export function Header({ health, updateInfo, onSearchOpen, activeTab, onTabChang
     <header className="sticky top-0 z-50 bg-bg-base/80 backdrop-blur-md border-b border-border mb-6">
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between relative">
         <div className="flex items-center gap-3">
-          <UseAILogo className="h-6" />
+          <button onClick={() => onTabChange('sessions')} className="cursor-pointer" aria-label="Go to sessions">
+            <UseAILogo className="h-6" />
+          </button>
           {health && health.active_sessions > 0 && (
             <StatusBadge
               label={`${health.active_sessions} active session${health.active_sessions !== 1 ? 's' : ''}`}

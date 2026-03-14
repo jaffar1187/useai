@@ -115,8 +115,14 @@ export function handleLocalStats(_req: IncomingMessage, res: ServerResponse): vo
 
       byClient[s.client] = (byClient[s.client] ?? 0) + s.duration_seconds;
 
-      for (const lang of s.languages) {
-        byLanguage[lang] = (byLanguage[lang] ?? 0) + s.duration_seconds;
+      // Fix languages corruption: some sessions have stringified arrays instead of real arrays
+      const langs = typeof s.languages === 'string' ? (() => { try { return JSON.parse(s.languages); } catch { return []; } })() : s.languages;
+      if (Array.isArray(langs)) {
+        for (const lang of langs) {
+          if (typeof lang === 'string' && lang.length > 1) {
+            byLanguage[lang] = (byLanguage[lang] ?? 0) + s.duration_seconds;
+          }
+        }
       }
 
       byTaskType[s.task_type] = (byTaskType[s.task_type] ?? 0) + s.duration_seconds;
@@ -331,8 +337,14 @@ export async function performSync(eventType: 'sync' | 'auto_sync' = 'sync'): Pro
       totalSeconds += s.duration_seconds;
       clients[s.client] = (clients[s.client] ?? 0) + s.duration_seconds;
       taskTypes[s.task_type] = (taskTypes[s.task_type] ?? 0) + s.duration_seconds;
-      for (const lang of s.languages) {
-        languages[lang] = (languages[lang] ?? 0) + s.duration_seconds;
+      // Fix languages corruption: some sessions have stringified arrays instead of real arrays
+      const langs = typeof s.languages === 'string' ? (() => { try { return JSON.parse(s.languages); } catch { return []; } })() : s.languages;
+      if (Array.isArray(langs)) {
+        for (const lang of langs) {
+          if (typeof lang === 'string' && lang.length > 1) {
+            languages[lang] = (languages[lang] ?? 0) + s.duration_seconds;
+          }
+        }
       }
     }
 
@@ -343,11 +355,24 @@ export async function performSync(eventType: 'sync' | 'auto_sync' = 'sync'): Pro
       clients,
       task_types: taskTypes,
       languages,
-      sessions: daySessions.map(({ prompt, prompt_images, title, private_title, project, ...rest }) => {
-        if (stripDetails) return rest;
-        return { ...rest, title, private_title, project };
+      sessions: daySessions.map(({ prompt, prompt_images, title, private_title, project, heartbeat_count, ...rest }) => {
+        // Fix languages corruption in individual session data
+        const fixedRest = { ...rest };
+        if (typeof fixedRest.languages === 'string') {
+          try { fixedRest.languages = JSON.parse(fixedRest.languages as unknown as string); } catch { fixedRest.languages = []; }
+        }
+        // Strip heartbeat_count (always 0) — sync_signature removed from payload level
+        if (stripDetails) {
+          // Strip evaluation reason texts — they may contain project/file details
+          if (fixedRest.evaluation) {
+            fixedRest.evaluation = Object.fromEntries(
+              Object.entries(fixedRest.evaluation).filter(([k]) => !k.endsWith('_reason'))
+            ) as typeof fixedRest.evaluation;
+          }
+          return fixedRest;
+        }
+        return { ...fixedRest, title, private_title, project };
       }),
-      sync_signature: '',
     };
 
     // Log every outgoing request for full transparency

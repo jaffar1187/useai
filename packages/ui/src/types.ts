@@ -7,4 +7,4 @@ export interface Filters {
   language: string;
 }
 
-export type ActiveTab = 'sessions' | 'insights' | 'settings' | 'logs';
+export type ActiveTab = 'sessions' | 'insights' | 'settings' | 'logs' | 'faqs';

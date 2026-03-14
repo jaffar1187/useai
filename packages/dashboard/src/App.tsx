@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { DashboardBody, SearchOverlay } from '@useai/ui';
 import { SettingsPage } from './components/SettingsPage';
 import { LogsPage } from './components/LogsPage';
+import { FaqsPage } from './components/FaqsPage';
 
 export function App() {
   const {
@@ -70,6 +71,8 @@ export function App() {
           <SettingsPage onTabChange={setActiveTab} />
         ) : activeTab === 'logs' ? (
           <LogsPage />
+        ) : activeTab === 'faqs' ? (
+          <FaqsPage />
         ) : (
           <>
             <SearchOverlay

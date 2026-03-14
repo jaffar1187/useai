@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Camera, BarChart3, Cloud, AlertTriangle, ChevronDown, Save, Check, Loader2, HardDrive, CloudUpload, Globe, Lock, ScrollText } from 'lucide-react';
+import { Camera, BarChart3, Cloud, AlertTriangle, ChevronDown, Save, Check, Loader2, HardDrive, CloudUpload, Globe, Lock, ScrollText, HelpCircle } from 'lucide-react';
 import type { ActiveTab } from '@useai/ui';
 import type { FullConfig, UserOrg } from '../lib/api';
 import { fetchFullConfig, patchConfig, fetchMyOrgs } from '../lib/api';
@@ -210,17 +210,6 @@ export function SettingsPage({ onTabChange }: { onTabChange?: (tab: ActiveTab) =
                 checked={draft.capture.prompt_images}
                 onChange={(v) => setCapture({ prompt_images: v })}
               />
-              <SettingSelect
-                label="Evaluation reasons"
-                description="When to include reason text for each score"
-                value={draft.capture.evaluation_reasons}
-                options={[
-                  { value: 'all', label: 'All scores' },
-                  { value: 'below_perfect', label: 'Below perfect only' },
-                  { value: 'none', label: 'None' },
-                ]}
-                onChange={(v) => setCapture({ evaluation_reasons: v as FullConfig['capture']['evaluation_reasons'] })}
-              />
             </div>
           </div>
 
@@ -242,6 +231,17 @@ export function SettingsPage({ onTabChange }: { onTabChange?: (tab: ActiveTab) =
                 description="Record accomplishments — included in titles & milestones sync"
                 checked={draft.capture.milestones}
                 onChange={(v) => setCapture({ milestones: v })}
+              />
+              <SettingSelect
+                label="Evaluation reasons"
+                description="When to include reason text for each score — included in titles & milestones sync"
+                value={draft.capture.evaluation_reasons}
+                options={[
+                  { value: 'all', label: 'All scores' },
+                  { value: 'below_perfect', label: 'Below perfect only' },
+                  { value: 'none', label: 'None' },
+                ]}
+                onChange={(v) => setCapture({ evaluation_reasons: v as FullConfig['capture']['evaluation_reasons'] })}
               />
             </div>
           </div>
@@ -317,7 +317,7 @@ export function SettingsPage({ onTabChange }: { onTabChange?: (tab: ActiveTab) =
                 <div className="divide-y divide-border/30 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.03] px-3">
                   <SettingToggle
                     label="Sync titles & milestones"
-                    description={`Session titles, project names, and milestones${orgs.length > 0 ? ' — also visible to org admins' : ''}`}
+                    description={`Session titles, project names, evaluation reasons, and milestones${orgs.length > 0 ? ' — also visible to org admins' : ''}`}
                     checked={draft.sync.include_details}
                     onChange={(v) => setSync({ include_details: v })}
                   />
@@ -363,20 +363,28 @@ export function SettingsPage({ onTabChange }: { onTabChange?: (tab: ActiveTab) =
         </div>
       </section>
 
-      {/* Sync Logs */}
+      {/* Sync Logs & FAQs */}
       <section className="bg-bg-surface-1 border border-border/50 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-3">
           <ScrollText className="w-4 h-4 text-text-muted" />
-          <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest">Sync Logs</h2>
+          <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest">More</h2>
         </div>
-        <p className="text-[11px] text-text-muted mb-3">View a log of all sync, login, and cloud pull events.</p>
-        <button
-          onClick={() => onTabChange?.('logs')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-bg-surface-2 border border-border/50 text-text-primary hover:bg-bg-surface-3 transition-colors"
-        >
-          <ScrollText className="w-3 h-3" />
-          View sync logs
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onTabChange?.('logs')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-bg-surface-2 border border-border/50 text-text-primary hover:bg-bg-surface-3 transition-colors"
+          >
+            <ScrollText className="w-3 h-3" />
+            View sync logs
+          </button>
+          <button
+            onClick={() => onTabChange?.('faqs')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-bg-surface-2 border border-border/50 text-text-primary hover:bg-bg-surface-3 transition-colors"
+          >
+            <HelpCircle className="w-3 h-3" />
+            FAQs
+          </button>
+        </div>
       </section>
 
       {/* Save bar */}
