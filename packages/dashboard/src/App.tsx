@@ -3,6 +3,7 @@ import { useDashboardStore } from './store';
 import { Header } from './components/Header';
 import { DashboardBody, SearchOverlay } from '@useai/ui';
 import { SettingsPage } from './components/SettingsPage';
+import { LogsPage } from './components/LogsPage';
 
 export function App() {
   const {
@@ -66,7 +67,9 @@ export function App() {
       <Header health={health} updateInfo={updateInfo} onSearchOpen={() => setSearchOpen(true)} activeTab={activeTab} onTabChange={setActiveTab} config={config} onRefresh={loadAll} />
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 pb-6">
         {activeTab === 'settings' ? (
-          <SettingsPage />
+          <SettingsPage onTabChange={setActiveTab} />
+        ) : activeTab === 'logs' ? (
+          <LogsPage />
         ) : (
           <>
             <SearchOverlay

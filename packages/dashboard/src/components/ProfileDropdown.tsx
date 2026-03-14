@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import type { LocalConfig } from '../lib/api';
 import { postSendOtp, postVerifyOtp, postSync, postLogout, checkUsername, updateUsername } from '../lib/api';
-import { RefreshCw, User, Mail, LogOut, Link, Pencil, Loader2, Check, X, ChevronDown } from 'lucide-react';
+import { RefreshCw, User, Mail, LogOut, Link, Pencil, Loader2, Check, X, ChevronDown, ScrollText } from 'lucide-react';
+import type { ActiveTab } from '@useai/ui';
 
 const USERNAME_REGEX = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -192,9 +193,10 @@ export interface ProfileDropdownHandle {
 interface ProfileDropdownProps {
   config: LocalConfig | null;
   onRefresh: () => void;
+  onTabChange?: (tab: ActiveTab) => void;
 }
 
-export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdownProps>(function ProfileDropdown({ config, onRefresh }, ref) {
+export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdownProps>(function ProfileDropdown({ config, onRefresh, onTabChange }, ref) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -362,8 +364,15 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
                 </div>
               </div>
 
-              {/* Sign out */}
-              <div className="px-4 py-2 border-t border-border/50">
+              {/* Logs + Sign out */}
+              <div className="px-4 py-2 border-t border-border/50 space-y-0.5">
+                <button
+                  onClick={() => { onTabChange?.('logs'); setOpen(false); }}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-bg-surface-2 transition-colors cursor-pointer"
+                >
+                  <ScrollText className="w-3.5 h-3.5" />
+                  Sync logs
+                </button>
                 <button
                   onClick={handleSignOut}
                   className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-text-muted hover:text-error hover:bg-error/10 transition-colors cursor-pointer"

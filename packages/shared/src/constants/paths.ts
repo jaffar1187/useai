@@ -9,6 +9,7 @@ export const KEYSTORE_FILE = join(USEAI_DIR, 'keystore.json');
 export const CONFIG_FILE = join(USEAI_DIR, 'config.json');
 export const SESSIONS_FILE = join(DATA_DIR, 'sessions.json');
 export const MILESTONES_FILE = join(DATA_DIR, 'milestones.json');
+export const SYNC_LOG_FILE = join(DATA_DIR, 'sync-log.json');
 export const DAEMON_PID_FILE = join(USEAI_DIR, 'daemon.pid');
 export const USEAI_HOOKS_DIR = join(USEAI_DIR, 'hooks');
 

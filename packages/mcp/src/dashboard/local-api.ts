@@ -11,6 +11,7 @@ import {
   migrateConfig,
   isValidSessionSeal,
 } from '@useai/shared';
+import { addLogEntry, getLogEntries } from './sync-log.js';
 import type { SessionSeal, Milestone, UseaiConfig } from '@useai/shared';
 import { reInjectAllInstructions } from '../tools.js';
 import { reconcileSessions, reconcileForSync } from '../reconcile.js';
@@ -144,6 +145,16 @@ export function handleLocalMilestones(_req: IncomingMessage, res: ServerResponse
   }
 }
 
+// ── Logs ────────────────────────────────────────────────────────────────────────
+
+export function handleLocalLogs(_req: IncomingMessage, res: ServerResponse): void {
+  try {
+    json(res, 200, getLogEntries());
+  } catch (err) {
+    json(res, 500, { error: (err as Error).message });
+  }
+}
+
 // ── Config ──────────────────────────────────────────────────────────────────────
 
 export function handleLocalConfig(_req: IncomingMessage, res: ServerResponse): void {
@@ -240,7 +251,7 @@ export function setOnConfigUpdated(cb: () => void): void {
 // ── Sync ────────────────────────────────────────────────────────────────────────
 
 /** Core sync logic — reusable from both the HTTP handler and the auto-sync timer. */
-export async function performSync(): Promise<{ success: boolean; last_sync_at?: string; error?: string }> {
+export async function performSync(eventType: 'sync' | 'auto_sync' = 'sync'): Promise<{ success: boolean; last_sync_at?: string; error?: string }> {
   const raw = readJson<Record<string, unknown>>(CONFIG_FILE, {});
   const config = migrateConfig(raw) as UseaiConfig;
 
@@ -297,6 +308,15 @@ export async function performSync(): Promise<{ success: boolean; last_sync_at?: 
       sync_signature: '',
     };
 
+    // Log every outgoing request for full transparency
+    addLogEntry({
+      event: eventType,
+      status: 'info',
+      message: `Sending ${daySessions.length} session${daySessions.length !== 1 ? 's' : ''} for ${date}`,
+      details: { date, sessions_synced: daySessions.length },
+      payload: { endpoint: `${USEAI_API}/api/sync`, method: 'POST', body: payload },
+    });
+
     const sessionsRes = await fetch(`${USEAI_API}/api/sync`, {
       method: 'POST',
       headers,
@@ -305,11 +325,14 @@ export async function performSync(): Promise<{ success: boolean; last_sync_at?: 
 
     if (!sessionsRes.ok) {
       const errBody = await sessionsRes.text();
-      return { success: false, error: `Sessions sync failed (${date}): ${sessionsRes.status} ${errBody}` };
+      const error = `Sessions sync failed (${date}): ${sessionsRes.status} ${errBody}`;
+      addLogEntry({ event: eventType, status: 'error', message: error, details: { error } });
+      return { success: false, error };
     }
   }
 
   // Publish milestones (skip when details are excluded)
+  let milestonesPublished = 0;
   if (config.sync.include_details) {
     const MILESTONE_CHUNK = 50;
     const allMilestones = readJson<Milestone[]>(MILESTONES_FILE, []);
@@ -320,17 +343,30 @@ export async function performSync(): Promise<{ success: boolean; last_sync_at?: 
     if (unpublished.length > 0) {
       for (let i = 0; i < unpublished.length; i += MILESTONE_CHUNK) {
         const chunk = unpublished.slice(i, i + MILESTONE_CHUNK);
+        const milestonePayload = { milestones: chunk };
+        addLogEntry({
+          event: eventType,
+          status: 'info',
+          message: `Publishing ${chunk.length} milestone${chunk.length !== 1 ? 's' : ''} (batch ${Math.floor(i / MILESTONE_CHUNK) + 1})`,
+          details: { milestones_published: chunk.length },
+          payload: { endpoint: `${USEAI_API}/api/publish`, method: 'POST', body: milestonePayload },
+        });
+
         const milestonesRes = await fetch(`${USEAI_API}/api/publish`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ milestones: chunk }),
+          body: JSON.stringify(milestonePayload),
         });
 
         if (!milestonesRes.ok) {
           const errBody = await milestonesRes.text();
-          return { success: false, error: `Milestones publish failed (chunk ${Math.floor(i / MILESTONE_CHUNK) + 1}): ${milestonesRes.status} ${errBody}` };
+          const error = `Milestones publish failed (chunk ${Math.floor(i / MILESTONE_CHUNK) + 1}): ${milestonesRes.status} ${errBody}`;
+          addLogEntry({ event: eventType, status: 'error', message: error, details: { error } });
+          return { success: false, error };
         }
       }
+
+      milestonesPublished = unpublished.length;
 
       // Mark all synced milestones as published locally
       const sentIds = new Set(unpublished.map(m => m.id));
@@ -346,6 +382,17 @@ export async function performSync(): Promise<{ success: boolean; last_sync_at?: 
   const now = new Date().toISOString();
   config.last_sync_at = now;
   writeJson(CONFIG_FILE, config);
+
+  addLogEntry({
+    event: eventType,
+    status: 'success',
+    message: `Synced ${sessions.length} session${sessions.length !== 1 ? 's' : ''} across ${byDate.size} date${byDate.size !== 1 ? 's' : ''}${milestonesPublished ? `, ${milestonesPublished} milestone${milestonesPublished !== 1 ? 's' : ''}` : ''}`,
+    details: {
+      sessions_synced: sessions.length,
+      dates_synced: byDate.size,
+      milestones_published: milestonesPublished,
+    },
+  });
 
   return { success: true, last_sync_at: now };
 }
@@ -431,6 +478,12 @@ export async function handleLocalVerifyOtp(req: IncomingMessage, res: ServerResp
       writeJson(CONFIG_FILE, config);
     }
 
+    addLogEntry({
+      event: 'login',
+      status: 'success',
+      message: `Logged in as ${data.user?.email ?? 'unknown'}`,
+    });
+
     json(res, 200, { success: true, email: data.user?.email, username: data.user?.username });
   } catch (err) {
     json(res, 500, { error: (err as Error).message });
@@ -502,6 +555,8 @@ export async function handleLocalLogout(req: IncomingMessage, res: ServerRespons
 
     delete config.auth;
     writeJson(CONFIG_FILE, config);
+
+    addLogEntry({ event: 'logout', status: 'info', message: 'Logged out' });
 
     json(res, 200, { success: true });
   } catch (err) {
@@ -739,6 +794,13 @@ export async function handleCloudPull(req: IncomingMessage, res: ServerResponse)
       writeJson(SESSIONS_FILE, localSessions);
     }
 
+    addLogEntry({
+      event: 'cloud_pull',
+      status: 'success',
+      message: `Pulled ${cloudSessions.length} session${cloudSessions.length !== 1 ? 's' : ''} from cloud, merged ${merged} new`,
+      details: { cloud_sessions: cloudSessions.length, merged },
+    });
+
     json(res, 200, {
       success: true,
       cloud_sessions: cloudSessions.length,
@@ -746,6 +808,12 @@ export async function handleCloudPull(req: IncomingMessage, res: ServerResponse)
       total_local: localSessions.length,
     });
   } catch (err) {
+    addLogEntry({
+      event: 'cloud_pull',
+      status: 'error',
+      message: `Cloud pull failed: ${(err as Error).message}`,
+      details: { error: (err as Error).message },
+    });
     json(res, 500, { error: (err as Error).message });
   }
 }

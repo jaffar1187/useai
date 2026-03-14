@@ -304,6 +304,36 @@ export function deleteMilestone(milestoneId: string): Promise<{ deleted: boolean
   return del(`/api/local/milestones/${encodeURIComponent(milestoneId)}`);
 }
 
+// ── Sync Logs ─────────────────────────────────────────────────────────────────
+
+export interface SyncLogEntry {
+  id: string;
+  timestamp: string;
+  event: 'sync' | 'auto_sync' | 'login' | 'logout' | 'cloud_pull';
+  status: 'success' | 'error' | 'info';
+  message: string;
+  details?: {
+    sessions_synced?: number;
+    milestones_published?: number;
+    dates_synced?: number;
+    sessions_corrected?: number;
+    sessions_corrupted?: number;
+    cloud_sessions?: number;
+    merged?: number;
+    error?: string;
+    [key: string]: unknown;
+  };
+  payload?: {
+    endpoint: string;
+    method: string;
+    body: unknown;
+  };
+}
+
+export function fetchLogs(): Promise<SyncLogEntry[]> {
+  return get('/api/local/logs');
+}
+
 // ── Config (full) ─────────────────────────────────────────────────────────────
 
 export interface FullConfig {

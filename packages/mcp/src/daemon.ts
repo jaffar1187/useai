@@ -54,6 +54,7 @@ import {
   handleLocalCheckUsername,
   handleLocalUpdateUser,
   handleLocalOrgs,
+  handleLocalLogs,
   handleDeleteSession,
   handleDeleteConversation,
   handleDeleteMilestone,
@@ -1185,7 +1186,7 @@ function scheduleAutoSync(): void {
 
     autoSyncTimer = setTimeout(async () => {
       try {
-        const result = await performSync();
+        const result = await performSync('auto_sync');
         if (result.success) {
           console.error(`[useai] Auto-sync completed at ${result.last_sync_at}`);
         } else {
@@ -1263,6 +1264,7 @@ export async function startDaemon(port?: number): Promise<void> {
       if (url.pathname === '/api/local/milestones') { handleLocalMilestones(req, res); return; }
       if (url.pathname === '/api/local/config') { handleLocalConfig(req, res); return; }
       if (url.pathname === '/api/local/config/full') { handleLocalConfigFull(req, res); return; }
+      if (url.pathname === '/api/local/logs') { handleLocalLogs(req, res); return; }
       if (url.pathname === '/api/local/update-check') { await handleUpdateCheck(res); return; }
 
       const usernameMatch = url.pathname.match(/^\/api\/local\/users\/check-username\/(.+)$/);

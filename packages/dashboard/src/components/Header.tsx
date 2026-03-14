@@ -119,7 +119,7 @@ export function Header({ health, updateInfo, onSearchOpen, activeTab, onTabChang
           {updateInfo?.update_available && (
             <UpdateBanner updateInfo={updateInfo} />
           )}
-          <ProfileDropdown ref={profileRef} config={config} onRefresh={onRefresh} />
+          <ProfileDropdown ref={profileRef} config={config} onRefresh={onRefresh} onTabChange={onTabChange} />
         </div>
       </div>
     </header>
