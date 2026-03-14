@@ -509,6 +509,33 @@ export async function handleLocalLogout(req: IncomingMessage, res: ServerRespons
   }
 }
 
+// ── User Organizations (proxy to useai.dev API) ──────────────────────────────
+
+export async function handleLocalOrgs(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  try {
+    const config = readJson<UseaiConfig>(CONFIG_FILE, {} as UseaiConfig);
+    if (!config.auth?.token) {
+      json(res, 200, []);
+      return;
+    }
+
+    const apiRes = await fetch(`${USEAI_API}/api/orgs`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${config.auth.token}` },
+    });
+
+    if (!apiRes.ok) {
+      json(res, 200, []);
+      return;
+    }
+
+    const data = await apiRes.json();
+    json(res, 200, data);
+  } catch {
+    json(res, 200, []);
+  }
+}
+
 // ── User Profile (proxy to useai.dev API) ────────────────────────────────────
 
 export async function handleLocalCheckUsername(

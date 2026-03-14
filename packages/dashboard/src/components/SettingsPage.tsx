@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Camera, BarChart3, Cloud, AlertTriangle, ChevronDown, Save, Check, Loader2 } from 'lucide-react';
-import type { FullConfig } from '../lib/api';
-import { fetchFullConfig, patchConfig } from '../lib/api';
+import { Camera, BarChart3, Cloud, AlertTriangle, ChevronDown, Save, Check, Loader2, HardDrive, CloudUpload, Globe, Lock } from 'lucide-react';
+import type { FullConfig, UserOrg } from '../lib/api';
+import { fetchFullConfig, patchConfig, fetchMyOrgs } from '../lib/api';
 
 // ── Inline sub-components ───────────────────────────────────────────────────
 
@@ -103,12 +103,14 @@ export function SettingsPage() {
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveResult, setSaveResult] = useState<string[] | null>(null); // tools updated
   const [error, setError] = useState<string | null>(null);
+  const [orgs, setOrgs] = useState<UserOrg[]>([]);
 
   useEffect(() => {
     fetchFullConfig()
       .then((c) => {
         setSaved(c);
         setDraft(structuredClone(c));
+        if (c.authenticated) fetchMyOrgs().then(setOrgs).catch(() => {});
       })
       .catch((err) => setError((err as Error).message));
   }, []);
@@ -178,44 +180,63 @@ export function SettingsPage() {
           <Camera className="w-4 h-4 text-text-muted" />
           <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest">Capture</h2>
         </div>
-        <p className="text-[11px] text-text-muted mb-3">What data to record locally for each session.</p>
+        <p className="text-[11px] text-text-muted mb-3">What data to record locally for each session. All data stays on your machine unless you enable Cloud Sync.</p>
 
-        <div className="divide-y divide-border/30">
-          <SettingToggle
-            label="Prompts"
-            description="Record prompt word count and content metadata"
-            checked={draft.capture.prompt}
-            onChange={(v) => setCapture({ prompt: v })}
-          />
-          <SettingToggle
-            label="Prompt images"
-            description="Record image descriptions from prompts"
-            checked={draft.capture.prompt_images}
-            onChange={(v) => setCapture({ prompt_images: v })}
-          />
-          <SettingToggle
-            label="Evaluation scores"
-            description="Record session quality scores (SPACE framework)"
-            checked={draft.capture.evaluation}
-            onChange={(v) => setCapture({ evaluation: v })}
-          />
-          <SettingSelect
-            label="Evaluation reasons"
-            description="When to include reason text for each score"
-            value={draft.capture.evaluation_reasons}
-            options={[
-              { value: 'all', label: 'All scores' },
-              { value: 'below_perfect', label: 'Below perfect only' },
-              { value: 'none', label: 'None' },
-            ]}
-            onChange={(v) => setCapture({ evaluation_reasons: v as FullConfig['capture']['evaluation_reasons'] })}
-          />
-          <SettingToggle
-            label="Milestones"
-            description="Record milestones (accomplishments) from each session"
-            checked={draft.capture.milestones}
-            onChange={(v) => setCapture({ milestones: v })}
-          />
+        <div className="space-y-3">
+          {/* Local only — never synced */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+              <HardDrive className="w-3 h-3 text-emerald-500" />
+              <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Local only — never synced</span>
+            </div>
+            <div className="divide-y divide-border/30 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.03] px-3">
+              <SettingToggle
+                label="Prompts"
+                description="Record prompt text and word count"
+                checked={draft.capture.prompt}
+                onChange={(v) => setCapture({ prompt: v })}
+              />
+              <SettingToggle
+                label="Prompt images"
+                description="Record image descriptions from prompts"
+                checked={draft.capture.prompt_images}
+                onChange={(v) => setCapture({ prompt_images: v })}
+              />
+              <SettingSelect
+                label="Evaluation reasons"
+                description="When to include reason text for each score"
+                value={draft.capture.evaluation_reasons}
+                options={[
+                  { value: 'all', label: 'All scores' },
+                  { value: 'below_perfect', label: 'Below perfect only' },
+                  { value: 'none', label: 'None' },
+                ]}
+                onChange={(v) => setCapture({ evaluation_reasons: v as FullConfig['capture']['evaluation_reasons'] })}
+              />
+            </div>
+          </div>
+
+          {/* Synced when Cloud Sync is enabled */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+              <CloudUpload className="w-3 h-3 text-blue-400" />
+              <span className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider">Synced when Cloud Sync is enabled</span>
+            </div>
+            <div className="divide-y divide-border/30 rounded-lg border border-blue-400/15 bg-blue-400/[0.03] px-3">
+              <SettingToggle
+                label="Evaluation scores"
+                description="Record session quality scores — included in stats sync"
+                checked={draft.capture.evaluation}
+                onChange={(v) => setCapture({ evaluation: v })}
+              />
+              <SettingToggle
+                label="Milestones"
+                description="Record accomplishments — included in titles & milestones sync"
+                checked={draft.capture.milestones}
+                onChange={(v) => setCapture({ milestones: v })}
+              />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -259,36 +280,76 @@ export function SettingsPage() {
           />
 
           {draft.sync.enabled && (
-            <>
-              <SettingToggle
-                label="Sync my stats"
-                description="Hours, languages, streaks — publicly visible on your profile"
-                checked={draft.sync.include_stats}
-                onChange={(v) => setSync({ include_stats: v })}
-              />
-              <SettingToggle
-                label="Sync titles & milestones"
-                description="Session titles and milestones — private, only visible to you"
-                checked={draft.sync.include_details}
-                onChange={(v) => setSync({ include_details: v })}
-              />
-              <SettingSelect
-                label="Sync interval"
-                description="How often to sync data"
-                value={String(draft.sync.interval_hours)}
-                options={[
-                  { value: '0.25', label: 'Every 15 minutes' },
-                  { value: '0.5', label: 'Every 30 minutes' },
-                  { value: '1', label: 'Every hour' },
-                  { value: '2', label: 'Every 2 hours' },
-                  { value: '3', label: 'Every 3 hours' },
-                  { value: '6', label: 'Every 6 hours' },
-                  { value: '12', label: 'Every 12 hours' },
-                  { value: '24', label: 'Every 24 hours' },
-                ]}
-                onChange={(v) => setSync({ interval_hours: Number(v) })}
-              />
-            </>
+            <div className="space-y-3 pt-2">
+              {/* Public — visible on profile */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+                  <Globe className="w-3 h-3 text-amber-400" />
+                  <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Public — visible on your profile</span>
+                </div>
+                <div className="divide-y divide-border/30 rounded-lg border border-amber-400/15 bg-amber-400/[0.03] px-3">
+                  <SettingToggle
+                    label="Sync my stats"
+                    description="Hours, languages, task types, streaks, evaluation scores"
+                    checked={draft.sync.include_stats}
+                    onChange={(v) => setSync({ include_stats: v })}
+                  />
+                </div>
+              </div>
+
+              {/* Private — visible to you & org */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+                  <Lock className="w-3 h-3 text-emerald-500" />
+                  <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">
+                    Private — visible to you{orgs.length > 0 ? ' & your organization' : ''}
+                  </span>
+                </div>
+                <div className="divide-y divide-border/30 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.03] px-3">
+                  <SettingToggle
+                    label="Sync titles & milestones"
+                    description={`Session titles, project names, and milestones${orgs.length > 0 ? ' — also visible to org admins' : ''}`}
+                    checked={draft.sync.include_details}
+                    onChange={(v) => setSync({ include_details: v })}
+                  />
+                  {orgs.length > 0 && (
+                    <div className="py-2">
+                      <div className="text-[10px] text-text-muted mb-1">Your organizations:</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {orgs.map((o) => (
+                          <span
+                            key={o.org.id}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-[10px] font-medium text-emerald-400"
+                          >
+                            {o.org.name}
+                            <span className="text-emerald-400/50">{o.role}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="divide-y divide-border/30">
+                <SettingSelect
+                  label="Sync interval"
+                  description="How often to sync data"
+                  value={String(draft.sync.interval_hours)}
+                  options={[
+                    { value: '0.25', label: 'Every 15 minutes' },
+                    { value: '0.5', label: 'Every 30 minutes' },
+                    { value: '1', label: 'Every hour' },
+                    { value: '2', label: 'Every 2 hours' },
+                    { value: '3', label: 'Every 3 hours' },
+                    { value: '6', label: 'Every 6 hours' },
+                    { value: '12', label: 'Every 12 hours' },
+                    { value: '24', label: 'Every 24 hours' },
+                  ]}
+                  onChange={(v) => setSync({ interval_hours: Number(v) })}
+                />
+              </div>
+            </div>
           )}
         </div>
       </section>

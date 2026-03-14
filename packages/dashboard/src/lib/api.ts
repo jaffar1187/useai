@@ -333,3 +333,15 @@ export function fetchFullConfig(): Promise<FullConfig> {
 export function patchConfig(updates: Record<string, unknown>): Promise<FullConfig & { instructions_updated?: string[] }> {
   return patch('/api/local/config', updates);
 }
+
+// ── Organizations ─────────────────────────────────────────────────────────────
+
+export interface UserOrg {
+  org: { id: string; name: string; slug: string };
+  role: string;
+}
+
+export function fetchMyOrgs(): Promise<UserOrg[]> {
+  if (isDev) return get('/cloud-api/api/orgs');
+  return get('/api/local/orgs');
+}

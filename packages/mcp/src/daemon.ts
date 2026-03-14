@@ -53,6 +53,7 @@ import {
   handleLocalSyncMark,
   handleLocalCheckUsername,
   handleLocalUpdateUser,
+  handleLocalOrgs,
   handleDeleteSession,
   handleDeleteConversation,
   handleDeleteMilestone,
@@ -1297,6 +1298,10 @@ export async function startDaemon(port?: number): Promise<void> {
     }
     if (url.pathname === '/api/local/cloud/pull' && req.method === 'POST') {
       await handleCloudPull(req, res);
+      return;
+    }
+    if (url.pathname === '/api/local/orgs' && req.method === 'GET') {
+      await handleLocalOrgs(req, res);
       return;
     }
 
