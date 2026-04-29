@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { LocalConfig } from '../lib/api';
 import { postSendOtp, postVerifyOtp, postSync, postLogout, checkUsername, updateUsername } from '../lib/api';
-import { RefreshCw, User, Mail, LogOut, Link, Pencil, Loader2, Check, X, ChevronDown, ScrollText, HelpCircle } from 'lucide-react';
-import type { ActiveTab } from '@useai/ui';
+import { RefreshCw, User, Mail, LogOut, Link, Pencil, Loader2, Check, X, ChevronDown } from 'lucide-react';
 
 const USERNAME_REGEX = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -193,10 +193,9 @@ export interface ProfileDropdownHandle {
 interface ProfileDropdownProps {
   config: LocalConfig | null;
   onRefresh: () => void;
-  onTabChange?: (tab: ActiveTab) => void;
 }
 
-export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdownProps>(function ProfileDropdown({ config, onRefresh, onTabChange }, ref) {
+export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdownProps>(function ProfileDropdown({ config, onRefresh }, ref) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -204,16 +203,37 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
+
+  // Reset auth form state when auth status changes (e.g. sign out)
+  useEffect(() => {
+    setStep('email');
+    setOtp('');
+    setMsg(null);
+    setLoading(false);
+  }, [config?.authenticated]);
 
   useImperativeHandle(ref, () => ({
-    open: () => setOpen(true),
+    open: () => {
+      if (triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        setDropdownPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+      }
+      setOpen(true);
+    },
   }));
 
   // Click-outside to close
   useEffect(() => {
     if (!open) return;
     const handleClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setOpen(false);
       }
     };
@@ -254,7 +274,12 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
       onRefresh();
       setOpen(false);
     } catch (err) {
-      setMsg((err as Error).message);
+      const message = (err as Error).message;
+      setMsg(message);
+      if (/no valid otp|request a new code/i.test(message)) {
+        setStep('email');
+        setOtp('');
+      }
     } finally {
       setLoading(false);
     }
@@ -265,12 +290,13 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
     setMsg(null);
     try {
       const data = await postSync();
-      if (data.success) {
+      const d = data as Record<string, unknown>;
+      if (d["success"] || d["ok"]) {
         setMsg('Synced!');
         onRefresh();
         setTimeout(() => setMsg(null), 3000);
       } else {
-        setMsg(data.error ?? 'Sync failed');
+        setMsg((d["error"] as string) ?? 'Sync failed');
       }
     } catch (err) {
       setMsg((err as Error).message);
@@ -281,21 +307,29 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
 
   const handleSignOut = useCallback(async () => {
     await postLogout();
-    onTabChange?.('sessions');
     onRefresh();
     setOpen(false);
-  }, [onRefresh, onTabChange]);
+  }, [onRefresh]);
 
   if (!config) return null;
 
   const isAuth = config.authenticated;
+
+  const handleTriggerClick = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    }
+    setOpen(v => !v);
+  };
 
   return (
     <div className="relative" ref={containerRef}>
       {/* Trigger button */}
       {isAuth ? (
         <button
-          onClick={() => setOpen(v => !v)}
+          ref={triggerRef}
+          onClick={handleTriggerClick}
           className="flex items-center gap-1.5 rounded-full transition-colors cursor-pointer hover:opacity-80"
         >
           <div className="relative w-7 h-7 rounded-full bg-accent/15 border border-accent/30 flex items-center justify-center">
@@ -303,13 +337,14 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
               {(config.email?.[0] ?? '?').toUpperCase()}
             </span>
             {/* Sync status dot */}
-            <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-bg-base ${config.last_sync_at ? 'bg-success' : 'bg-warning'}`} />
+            <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-bg-base ${config.lastSyncAt ? 'bg-success' : 'bg-warning'}`} />
           </div>
           <ChevronDown className={`w-3 h-3 text-text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
       ) : (
         <button
-          onClick={() => setOpen(v => !v)}
+          ref={triggerRef}
+          onClick={handleTriggerClick}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent hover:bg-accent-bright text-bg-base text-xs font-bold tracking-wide transition-colors cursor-pointer"
         >
           <User className="w-3 h-3" />
@@ -317,9 +352,13 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
         </button>
       )}
 
-      {/* Dropdown panel */}
-      {open && (
-        <div className="absolute right-0 top-full mt-2 z-50 w-80 rounded-lg bg-bg-surface-1 border border-border shadow-lg">
+      {/* Dropdown panel — rendered via portal to escape header's stacking context */}
+      {open && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[9999] w-80 rounded-lg border shadow-xl"
+          style={{ top: dropdownPos.top, right: dropdownPos.right, backgroundColor: 'var(--bg-surface-1)', borderColor: 'var(--border)' }}
+        >
           {isAuth ? (
             <div>
               {/* Email */}
@@ -345,7 +384,7 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
               <div className="px-4 py-2 border-t border-border/50">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-text-muted font-mono uppercase tracking-tighter">
-                    Last sync: {formatLastSync(config.last_sync_at)}
+                    Last sync: {formatLastSync(config.lastSyncAt)}
                   </span>
                   <div className="flex items-center gap-2">
                     {msg && (
@@ -365,22 +404,8 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
                 </div>
               </div>
 
-              {/* Logs + Sign out */}
-              <div className="px-4 py-2 border-t border-border/50 space-y-0.5">
-                <button
-                  onClick={() => { onTabChange?.('logs'); setOpen(false); }}
-                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-bg-surface-2 transition-colors cursor-pointer"
-                >
-                  <ScrollText className="w-3.5 h-3.5" />
-                  Sync logs
-                </button>
-                <button
-                  onClick={() => { onTabChange?.('faqs'); setOpen(false); }}
-                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-bg-surface-2 transition-colors cursor-pointer"
-                >
-                  <HelpCircle className="w-3.5 h-3.5" />
-                  FAQs
-                </button>
+              {/* Sign out */}
+              <div className="px-4 py-2 border-t border-border/50">
                 <button
                   onClick={handleSignOut}
                   className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-text-muted hover:text-error hover:bg-error/10 transition-colors cursor-pointer"
@@ -441,7 +466,8 @@ export const ProfileDropdown = forwardRef<ProfileDropdownHandle, ProfileDropdown
               )}
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

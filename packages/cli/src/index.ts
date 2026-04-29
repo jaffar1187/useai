@@ -1,36 +1,60 @@
 #!/usr/bin/env node
-import { Command } from 'commander';
-import { VERSION } from '@useai/shared/constants';
-import { statsCommand } from './commands/stats.js';
-import { statusCommand } from './commands/status.js';
-import { milestonesCommand } from './commands/milestones.js';
-import { configCommand } from './commands/config.js';
-import { exportCommand } from './commands/export.js';
-import { purgeCommand } from './commands/purge.js';
-import { mcpCommand } from './commands/setup.js';
-import { daemonCommand } from './commands/daemon.js';
-import { serveCommand } from './commands/serve.js';
-import { loginCommand, logoutCommand } from './commands/login.js';
-import { updateCommand } from './commands/update.js';
+import { Command } from "commander";
+
+import { registerStats }      from "./commands/stats.js";
+import { registerStatus }     from "./commands/status.js";
+import { registerExport }     from "./commands/export.js";
+import { registerServe }      from "./commands/serve.js";
+import { registerConfig }     from "./commands/config.js";
+import { registerLogin }      from "./commands/login.js";
+import { registerLogout }     from "./commands/logout.js";
+import { registerSync }       from "./commands/sync.js";
+import { registerUpdate }     from "./commands/update.js";
+
+import { registerDaemonStart }   from "./commands/daemon/start.js";
+import { registerDaemonStop }    from "./commands/daemon/stop.js";
+import { registerDaemonRestart } from "./commands/daemon/restart.js";
+import { registerDaemonStatus }  from "./commands/daemon/status.js";
+import { registerDaemonLogs }    from "./commands/daemon/logs.js";
+
+import { registerMcpSetup }  from "./commands/mcp/setup.js";
+import { registerMcpRemove } from "./commands/mcp/remove.js";
 
 const program = new Command();
 
 program
-  .name('useai')
-  .description('useai.dev — Track your AI-assisted development workflow')
-  .version(VERSION);
+  .name("useai")
+  .description("Track and improve your AI coding sessions")
+  .version("0.1.0");
 
-program.addCommand(statsCommand);
-program.addCommand(statusCommand);
-program.addCommand(milestonesCommand);
-program.addCommand(configCommand);
-program.addCommand(exportCommand);
-program.addCommand(purgeCommand);
-program.addCommand(mcpCommand, { isDefault: true });
-program.addCommand(daemonCommand);
-program.addCommand(serveCommand);
-program.addCommand(loginCommand);
-program.addCommand(logoutCommand);
-program.addCommand(updateCommand);
+// Top-level commands
+registerStats(program);
+registerStatus(program);
+registerExport(program);
+registerServe(program);
+registerConfig(program);
+registerLogin(program);
+registerLogout(program);
+registerSync(program);
+registerUpdate(program);
+
+// useai daemon <subcommand>
+const daemon = program
+  .command("daemon")
+  .description("Manage the useai daemon");
+
+registerDaemonStart(daemon);
+registerDaemonStop(daemon);
+registerDaemonRestart(daemon);
+registerDaemonStatus(daemon);
+registerDaemonLogs(daemon);
+
+// useai mcp <subcommand>
+const mcp = program
+  .command("mcp")
+  .description("Manage MCP installation in AI tools");
+
+registerMcpSetup(mcp);
+registerMcpRemove(mcp);
 
 program.parse();

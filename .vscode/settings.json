@@ -1,0 +1,15 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true
+  },
+  "typescript.disableAutomaticTypeAcquisition": true,
+  "typescript.tsserver.nodePath": "node",
+  "typescript.preferences.includePackageJsonAutoImports": "on"
+}

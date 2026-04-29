@@ -1,49 +1,30 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import type { SessionSeal, Milestone } from '../lib/api';
-import type { Filters } from '@useai/ui';
-import { SessionList } from '@useai/ui';
+import type { FeedConversation } from '../lib/api';
+import { fetchPrompts } from '../lib/api';
+import type { Filters } from '../lib/types';
+import type { ConversationGroup } from '../lib/stats';
+import { SessionList } from './sessions/SessionList';
 
-const DEFAULT_FILTERS: Filters = { category: 'all', client: 'all', project: 'all', language: 'all' };
-
-function matchSession(session: SessionSeal, milestones: Milestone[], words: string[], showPublic: boolean): boolean {
-  const fields: (string | undefined)[] = showPublic
-    ? [
-        session.title,
-        session.client,
-        session.task_type,
-        ...session.languages,
-        ...milestones.map(m => m.title),
-      ]
-    : [
-        session.private_title,
-        session.title,
-        session.client,
-        session.task_type,
-        ...session.languages,
-        ...milestones.map(m => m.private_title),
-        ...milestones.map(m => m.title),
-      ];
-
-  const haystack = fields.filter(Boolean).join(' ').toLowerCase();
-  return words.every(w => haystack.includes(w));
-}
+const DEFAULT_FILTERS: Filters = { category: 'all', tool: 'all', project: 'all', language: 'all' };
 
 interface SearchOverlayProps {
   open: boolean;
   onClose: () => void;
-  sessions: SessionSeal[];
-  milestones: Milestone[];
-  deleteSession: (sessionId: string) => void;
-  deleteConversation: (conversationId: string) => void;
-  deleteMilestone: (milestoneId: string) => void;
+  onDeleteSession?: ((sessionId: string) => void) | undefined;
+  onDeleteConversation?: ((connectionId: string) => void) | undefined;
+  onDeleteMilestone?: ((milestoneId: string) => void) | undefined;
 }
 
-export function SearchOverlay({ open, onClose, sessions, milestones, deleteSession, deleteConversation, deleteMilestone }: SearchOverlayProps) {
+export function SearchOverlay({ open, onClose, onDeleteSession, onDeleteConversation, onDeleteMilestone }: SearchOverlayProps) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [showPublic, setShowPublic] = useState(false);
+  const [results, setResults] = useState<FeedConversation[]>([]);
+  const [_totalResults, setTotalResults] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus input when opening
@@ -51,11 +32,13 @@ export function SearchOverlay({ open, onClose, sessions, milestones, deleteSessi
     if (open) {
       setQuery('');
       setDebouncedQuery('');
+      setResults([]);
+      setTotalResults(0);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
 
-  // Scroll lock on both html and body (prevents macOS elastic scroll-through)
+  // Scroll lock
   useEffect(() => {
     if (!open) return;
     const html = document.documentElement;
@@ -83,31 +66,60 @@ export function SearchOverlay({ open, onClose, sessions, milestones, deleteSessi
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Build a milestones-by-session lookup once
-  const milestonesBySession = useMemo(() => {
-    const map = new Map<string, Milestone[]>();
-    for (const m of milestones) {
-      const arr = map.get(m.session_id);
-      if (arr) arr.push(m);
-      else map.set(m.session_id, [m]);
+  // Fetch search results from server
+  useEffect(() => {
+    const trimmed = debouncedQuery.trim();
+    if (!trimmed) {
+      setResults([]);
+      setTotalResults(0);
+      setHasMore(false);
+      return;
     }
-    return map;
-  }, [milestones]);
 
-  // Filter sessions
-  const { filteredSessions, filteredMilestones, highlightWords } = useMemo(() => {
-    const trimmed = debouncedQuery.trim().toLowerCase();
-    if (!trimmed) return { filteredSessions: [] as SessionSeal[], filteredMilestones: [] as Milestone[], highlightWords: [] as string[] };
+    setLoading(true);
+    fetchPrompts({
+      start: new Date(Date.now() - 32 * 86400000).toISOString(),
+      end: new Date().toISOString(),
+      search: trimmed,
+      offset: 0,
+      limit: 50,
+    })
+      .then((data) => {
+        setResults(data.conversations);
+        setTotalResults(data.total);
+        setHasMore(data.hasMore);
+        setLoading(false);
+      })
+      .catch(() => {
+        setResults([]);
+        setLoading(false);
+      });
+  }, [debouncedQuery]);
 
-    const words = trimmed.split(/\s+/);
-    const matched = sessions.filter(s => matchSession(s, milestonesBySession.get(s.session_id) ?? [], words, showPublic));
-    const matchedIds = new Set(matched.map(s => s.session_id));
-    const matchedMilestones = milestones.filter(m => matchedIds.has(m.session_id));
-
-    return { filteredSessions: matched, filteredMilestones: matchedMilestones, highlightWords: words };
-  }, [sessions, milestones, milestonesBySession, debouncedQuery, showPublic]);
+  const handleLoadMore = useCallback(() => {
+    const trimmed = debouncedQuery.trim();
+    if (!trimmed || loading || !hasMore) return;
+    setLoading(true);
+    fetchPrompts({
+      start: new Date(Date.now() - 32 * 86400000).toISOString(),
+      end: new Date().toISOString(),
+      search: trimmed,
+      offset: results.length,
+      limit: 50,
+    })
+      .then((data) => {
+        setResults((prev) => [...prev, ...data.conversations]);
+        setHasMore(data.hasMore);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [debouncedQuery, results.length, loading, hasMore]);
 
   const hasQuery = debouncedQuery.trim().length > 0;
+  const highlightWords = hasQuery ? debouncedQuery.trim().toLowerCase().split(/\s+/) : [];
+
+  // Count total sessions across all conversation groups
+  const promptCount = results.reduce((sum, c) => sum + c.prompts.length, 0);
 
   return (
     <AnimatePresence>
@@ -176,25 +188,30 @@ export function SearchOverlay({ open, onClose, sessions, milestones, deleteSessi
                   <div className="text-center py-12 text-sm text-text-muted/60">
                     Type to search across all sessions
                   </div>
-                ) : filteredSessions.length === 0 ? (
+                ) : loading && results.length === 0 ? (
+                  <div className="text-center py-12 text-sm text-text-muted/60">
+                    Searching...
+                  </div>
+                ) : results.length === 0 ? (
                   <div className="text-center py-12 text-sm text-text-muted/60">
                     No results for &ldquo;{debouncedQuery.trim()}&rdquo;
                   </div>
                 ) : (
                   <>
                     <div className="text-[10px] font-mono text-text-muted uppercase tracking-wider mb-3 px-1">
-                      {filteredSessions.length} result{filteredSessions.length !== 1 ? 's' : ''}
+                      {promptCount} result{promptCount !== 1 ? 's' : ''}
                     </div>
                     <SessionList
-                      sessions={filteredSessions}
-                      milestones={filteredMilestones}
+                      preGrouped={results as unknown as ConversationGroup[]}
                       filters={DEFAULT_FILTERS}
                       globalShowPublic={showPublic || undefined}
                       showFullDate
                       highlightWords={highlightWords}
-                      onDeleteSession={deleteSession}
-                      onDeleteConversation={deleteConversation}
-                      onDeleteMilestone={deleteMilestone}
+                      onDeleteSession={onDeleteSession}
+                      onDeleteConversation={onDeleteConversation}
+                      onDeleteMilestone={onDeleteMilestone}
+                      onLoadMore={handleLoadMore}
+                      hasMore={hasMore}
                     />
                   </>
                 )}

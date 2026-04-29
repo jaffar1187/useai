@@ -1,21 +1,19 @@
-import { useEffect, useState } from 'react';
-import { useDashboardStore } from './store';
-import { Header } from './components/Header';
-import { DashboardBody, SearchOverlay } from '@useai/ui';
-import { SettingsPage } from './components/SettingsPage';
-import { LogsPage } from './components/LogsPage';
-import { FaqsPage } from './components/FaqsPage';
-import { OnboardingModal, wasOnboardingDismissed } from './components/OnboardingModal';
+import { useEffect, useState } from "react";
+import { useDashboardStore } from "./store";
+import { Header } from "./components/Header";
+import { DashboardBody } from "./components/DashboardBody";
+import { SearchOverlay } from "./components/SearchOverlay";
+import { SettingsPage } from "./components/SettingsPage";
+import { FaqsPage } from "./components/FaqsPage";
+import { LogsPage } from "./components/LogsPage";
 
 export function App() {
   const {
-    sessions,
-    milestones,
     config,
     health,
     updateInfo,
     loading,
-    loadAll,
+    loadConfig,
     loadHealth,
     loadUpdateCheck,
     deleteSession,
@@ -27,42 +25,33 @@ export function App() {
 
   // Load data on mount
   useEffect(() => {
-    loadAll();
+    loadConfig();
     loadHealth();
     loadUpdateCheck();
-  }, [loadAll, loadHealth, loadUpdateCheck]);
+  }, []);
 
   // Auto-refresh every 30s
   useEffect(() => {
     const healthInterval = setInterval(loadHealth, 30000);
-    const dataInterval = setInterval(loadAll, 30000);
+    const dataInterval = setInterval(loadConfig, 30000);
     return () => {
       clearInterval(healthInterval);
       clearInterval(dataInterval);
     };
-  }, [loadAll, loadHealth]);
+  }, []);
 
   const [searchOpen, setSearchOpen] = useState(false);
-  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
-
-  // Show onboarding modal after login when username is missing or sync is disabled
-  const showOnboarding =
-    !loading &&
-    !!config?.authenticated &&
-    !onboardingDismissed &&
-    !wasOnboardingDismissed(config?.email ?? null) &&
-    (!config?.username || !config?.auto_sync);
 
   // Cmd+K / Ctrl+K to open search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setSearchOpen(v => !v);
+        setSearchOpen((v) => !v);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   if (loading) {
@@ -75,35 +64,34 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-bg-base selection:bg-accent/30 selection:text-text-primary">
-      {showOnboarding && config && (
-        <OnboardingModal
-          config={config}
-          onComplete={() => { setOnboardingDismissed(true); loadAll(); }}
-        />
-      )}
-      <Header health={health} updateInfo={updateInfo} onSearchOpen={() => setSearchOpen(true)} activeTab={activeTab} onTabChange={setActiveTab} config={config} onRefresh={loadAll} />
+      <Header
+        health={health}
+        updateInfo={updateInfo}
+        onSearchOpen={() => setSearchOpen(true)}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        config={config}
+        onRefresh={loadConfig}
+      />
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 pb-6">
-        {activeTab === 'settings' ? (
-          <SettingsPage onTabChange={setActiveTab} />
-        ) : activeTab === 'logs' ? (
+        {activeTab === "logs" ? (
           <LogsPage />
-        ) : activeTab === 'faqs' ? (
+        ) : activeTab === "faqs" ? (
           <FaqsPage />
+        ) : activeTab === "settings" ? (
+          <SettingsPage onTabChange={setActiveTab as (tab: string) => void} />
         ) : (
           <>
             <SearchOverlay
               open={searchOpen}
               onClose={() => setSearchOpen(false)}
-              sessions={sessions}
-              milestones={milestones}
               onDeleteSession={deleteSession}
               onDeleteConversation={deleteConversation}
               onDeleteMilestone={deleteMilestone}
             />
 
             <DashboardBody
-              sessions={sessions}
-              milestones={milestones}
+              useStore={useDashboardStore}
               onDeleteSession={deleteSession}
               onDeleteConversation={deleteConversation}
               onDeleteMilestone={deleteMilestone}

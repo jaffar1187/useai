@@ -1,0 +1,26 @@
+{
+  "name": "@devness/useai-types",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "exports": {
+    ".": "./dist/index.js",
+    "./session": "./dist/session.js",
+    "./config": "./dist/config.js",
+    "./chain": "./dist/chain.js",
+    "./api": "./dist/api.js",
+    "./tools": "./dist/tools.js",
+    "./user": "./dist/user.js",
+    "./leaderboard": "./dist/leaderboard.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  }
+}

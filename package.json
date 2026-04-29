@@ -1,34 +1,18 @@
 {
-  "name": "useai",
-  "version": "0.2.0",
+  "name": "useai-v3",
+  "version": "0.1.0",
   "private": true,
-  "description": "useai.dev — Track your AI-assisted development workflow",
-  "author": "nabeelkausari",
-  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "dev:dashboard": "pnpm --filter @useai/dashboard run dev",
-    "dev:daemon": "pnpm --filter @devness/useai run daemon",
-    "dev:mcp": "turbo dev --filter=@devness/useai",
-    "dev:cli": "turbo dev --filter=@devness/useai-cli",
-    "lint": "turbo lint",
-    "typecheck": "turbo typecheck",
-    "test": "turbo test",
-    "clean": "turbo clean && rm -rf node_modules",
-    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
-    "publish:packages": "node scripts/publish.mjs",
-    "split:repo": "bash scripts/split-repo.sh"
+    "build": "turbo run build",
+    "dev": "turbo run dev --concurrency=20",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean"
   },
   "devDependencies": {
-    "prettier": "^3.2.5",
     "turbo": "^2.3.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.0"
   },
-  "packageManager": "pnpm@9.15.4",
-  "engines": {
-    "node": ">=18"
-  }
+  "packageManager": "pnpm@9.15.4"
 }

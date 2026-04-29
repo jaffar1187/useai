@@ -1,52 +1,50 @@
-const API = '';
-
-// In dev mode (Vite on :5174), cloud API calls go through /cloud-api proxy → localhost:3010
-// In production (embedded in daemon on :19200), they go through the daemon's /api/local/* handlers
-const isDev = import.meta.env.DEV;
-
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API}${path}`);
+  const res = await fetch(`${path}`);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    method: 'POST',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const opts: RequestInit = { method: "POST" };
+  if (body) {
+    opts.headers = { "Content-Type": "application/json" };
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(`${path}`, opts);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error((data as { message?: string }).message ?? `${res.status} ${res.statusText}`);
+    throw new Error(
+      (data as { message?: string }).message ??
+        `${res.status} ${res.statusText}`,
+    );
   }
   return res.json() as Promise<T>;
 }
 
 async function patch<T>(path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (body) headers['Content-Type'] = 'application/json';
-  if (isDev) {
-    const token = localStorage.getItem('useai_dev_token');
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+  const opts: RequestInit = { method: "PATCH" };
+  if (body) {
+    opts.headers = { "Content-Type": "application/json" };
+    opts.body = JSON.stringify(body);
   }
-  const res = await fetch(`${API}${path}`, {
-    method: 'PATCH',
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const res = await fetch(`${path}`, opts);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error((data as { message?: string }).message ?? `${res.status} ${res.statusText}`);
+    throw new Error(
+      (data as { message?: string }).message ??
+        `${res.status} ${res.statusText}`,
+    );
   }
   return res.json() as Promise<T>;
 }
 
 async function del<T>(path: string): Promise<T> {
-  const res = await fetch(`${API}${path}`, { method: 'DELETE' });
+  const res = await fetch(`${path}`, { method: "DELETE" });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error((data as { error?: string }).error ?? `${res.status} ${res.statusText}`);
+    throw new Error(
+      (data as { error?: string }).error ?? `${res.status} ${res.statusText}`,
+    );
   }
   return res.json() as Promise<T>;
 }
@@ -54,90 +52,189 @@ async function del<T>(path: string): Promise<T> {
 // ── Data endpoints ───────────────────────────────────────────────────────────
 
 export interface SessionEvaluation {
-  prompt_quality: number;
-  prompt_quality_reason?: string;
-  context_provided: number;
-  context_provided_reason?: string;
-  task_outcome: 'completed' | 'partial' | 'abandoned' | 'blocked';
-  task_outcome_reason?: string;
-  iteration_count: number;
-  independence_level: number;
-  independence_level_reason?: string;
-  scope_quality: number;
-  scope_quality_reason?: string;
-  tools_leveraged: number;
+  promptQuality: number;
+  promptQualityReason?: string;
+  promptQualityIdeal?: string;
+  contextProvided: number;
+  contextProvidedReason?: string;
+  contextProvidedIdeal?: string;
+  taskOutcome: "completed" | "partial" | "abandoned" | "blocked";
+  taskOutcomeReason?: string;
+  taskOutcomeIdeal?: string;
+  iterationCount: number;
+  independenceLevel: number;
+  independenceLevelReason?: string;
+  independenceLevelIdeal?: string;
+  scopeQuality: number;
+  scopeQualityReason?: string;
+  scopeQualityIdeal?: string;
+  toolsLeveraged: number;
 }
 
 export interface SessionSeal {
-  session_id: string;
-  conversation_id?: string;
-  conversation_index?: number;
+  promptId: string;
+  connectionId?: string;
+  conversationIndex?: number;
   client: string;
-  task_type: string;
+  taskType: string;
   languages: string[];
-  files_touched: number;
+  filesTouched: number;
   project?: string;
   title?: string;
-  private_title?: string;
+  privateTitle?: string;
   prompt?: string;
-  prompt_image_count?: number;
-  prompt_images?: Array<{ type: 'image'; description: string }>;
-  prompt_word_count?: number;
+  promptImageCount?: number;
+  promptImages?: Array<{ type: "image"; description: string }>;
+  promptWordCount?: number;
   model?: string;
   evaluation?: SessionEvaluation;
-  started_at: string;
-  ended_at: string;
-  duration_seconds: number;
-  heartbeat_count: number;
-  record_count: number;
-  chain_start_hash: string;
-  chain_end_hash: string;
-  seal_signature: string;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  /** Active time segments as [isoStart, isoEnd] pairs. When present, used for accurate User Time union. */
+  activeSegments?: [string, string][];
+  heartbeatCount: number;
+  recordCount: number;
+  chainStartHash: string;
+  chainEndHash: string;
+  sealSignature: string;
 }
 
 export interface Milestone {
   id: string;
-  session_id: string;
+  promptId: string;
   title: string;
-  private_title?: string;
+  privateTitle?: string;
   project?: string;
   category: string;
   complexity: string;
-  duration_minutes: number;
+  durationMinutes: number;
   languages: string[];
   client: string;
-  created_at: string;
+  createdAt: string;
   published: boolean;
-  published_at: string | null;
-  chain_hash: string;
+  publishedAt: string | null;
+  chainHash: string;
 }
 
 export interface LocalConfig {
-  mode: 'local' | 'cloud';
+  mode: "local" | "cloud";
   authenticated: boolean;
   email: string | null;
   username: string | null;
-  last_sync_at: string | null;
-  auto_sync: boolean;
+  lastSyncAt: string | null;
+  autoSync: boolean;
 }
 
-export function fetchSessions(): Promise<SessionSeal[]> {
-  return get('/api/local/sessions');
+// ── Server-side computed endpoints ────────────────────────────────────────
+
+export interface DashboardResponse {
+  window: { start: number; end: number; scale: string };
+  stats: {
+    totalHours: number;
+    totalSessions: number;
+    coveredHours: number;
+    aiMultiplier: number;
+    peakConcurrency: number;
+    currentStreak: number;
+    filesTouched: number;
+    featuresShipped: number;
+    bugsFixed: number;
+    complexSolved: number;
+    totalMilestones: number;
+    completionRate: number;
+    activeProjects: number;
+    byToolClockTime: Record<string, number>;
+    byLanguageClockTime: Record<string, number>;
+    byTaskTypeClockTime: Record<string, number>;
+    byProjectAiTime: Record<string, number>;
+    byProjectClock: Record<string, number>;
+    byAiToolDuration: Record<string, number>;
+    byLanguageAiTime: Record<string, number>;
+    byTaskTypeAiTime: Record<string, number>;
+  };
+  evaluation: {
+    sessionCount: number;
+    promptQuality: number;
+    contextProvided: number;
+    scopeQuality: number;
+    independenceLevel: number;
+  } | null;
+  sessionCount: number;
+  milestoneCount: number;
+  complexity: { simple: number; medium: number; complex: number };
+  sessions: SessionSeal[];
+  milestones: Milestone[];
+  activity: {
+    hourlyClockTime: Array<{ hour: number; minutes: number }>;
+    hourlyAiTime: Array<{ hour: number; minutes: number }>;
+    dailyClockTime: Array<{ date: string; hours: number }>;
+    dailyAiTime: Array<{ date: string; hours: number }>;
+    weeklyClockTime: Array<{ label: string; hours: number }>;
+    weeklyAiTime: Array<{ label: string; hours: number }>;
+    monthlyClockTime: Array<{ label: string; hours: number }>;
+    monthlyAiTime: Array<{ label: string; hours: number }>;
+    effectiveDate: string;
+  };
 }
 
-export function fetchMilestones(): Promise<Milestone[]> {
-  return get('/api/local/milestones');
+export interface FeedConversation {
+  connectionId: string;
+  prompts: Array<{
+    prompt: SessionSeal;
+    milestones: Milestone[];
+  }>;
+  aggregateEval: {
+    promptQuality: number;
+    contextProvided: number;
+    independenceLevel: number;
+    scopeQuality: number;
+    toolsLeveraged: number;
+    promptCount: number;
+  } | null;
+  aiTime: number;
+  totalMilestones: number;
+  startedAt: string;
+  endedAt: string;
+  lastSessionAt: string;
 }
 
-export async function fetchConfig(): Promise<LocalConfig> {
-  const config = await get<LocalConfig>('/api/local/config');
-  // In dev mode, auth goes directly to cloud API and state is in localStorage
-  if (isDev && localStorage.getItem('useai_dev_token')) {
-    config.authenticated = true;
-    config.email = localStorage.getItem('useai_dev_email') ?? config.email;
-    config.username = localStorage.getItem('useai_dev_username') || config.username;
-  }
-  return config;
+export interface FeedResponse {
+  total: number;
+  conversations: FeedConversation[];
+  hasMore: boolean;
+}
+
+export function fetchAggregations(
+  start: string,
+  end: string,
+): Promise<DashboardResponse> {
+  const params = new URLSearchParams({ start, end });
+  return get(`/api/local/aggregations?${params}`);
+}
+
+export function fetchPrompts(params: {
+  start: string;
+  end: string;
+  offset?: number | undefined;
+  limit?: number | undefined;
+  tool?: string | undefined;
+  language?: string | undefined;
+  project?: string | undefined;
+  search?: string | undefined;
+}): Promise<FeedResponse> {
+  const qs = new URLSearchParams({ start: params.start, end: params.end });
+  if (params.offset != null) qs.set("offset", String(params.offset));
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  if (params.tool) qs.set("tool", params.tool);
+  if (params.language) qs.set("language", params.language);
+  if (params.project) qs.set("project", params.project);
+  if (params.search) qs.set("search", params.search);
+  return get(`/api/local/prompts?${qs}`);
+}
+
+export function fetchConfig(): Promise<LocalConfig> {
+  return get("/api/local/config");
 }
 
 // ── Update check ─────────────────────────────────────────────────────────────
@@ -149,7 +246,7 @@ export interface UpdateInfo {
 }
 
 export function fetchUpdateCheck(): Promise<UpdateInfo> {
-  return get('/api/local/update-check');
+  return get("/api/local/update-check");
 }
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -163,208 +260,92 @@ export interface HealthInfo {
 }
 
 export function fetchHealth(): Promise<HealthInfo> {
-  return get('/health');
+  return get("/health");
 }
 
 // ── Auth/Sync ────────────────────────────────────────────────────────────────
-// Dev:  /cloud-api/api/auth/* → Vite proxy → localhost:3010/api/auth/*
-// Prod: /api/local/auth/*     → daemon     → api.useai.dev/api/auth/*
 
 export function postSendOtp(email: string): Promise<{ message: string }> {
-  if (isDev) return post('/cloud-api/api/auth/send-otp', { email });
-  return post('/api/local/auth/send-otp', { email });
+  return post("/api/local/auth/send-otp", { email });
 }
 
-export async function postVerifyOtp(email: string, code: string): Promise<{ success: boolean; email?: string; username?: string }> {
-  if (isDev) {
-    // Call cloud API directly, store token locally for dev sync
-    const data = await post<{ token: string; user: { id: string; email: string; username?: string } }>(
-      '/cloud-api/api/auth/verify-otp',
-      { email, code },
-    );
-    localStorage.setItem('useai_dev_token', data.token);
-    localStorage.setItem('useai_dev_email', data.user.email);
-    localStorage.setItem('useai_dev_username', data.user.username ?? '');
-    return { success: true, email: data.user.email, username: data.user.username };
-  }
-  return post('/api/local/auth/verify-otp', { email, code });
+export async function postVerifyOtp(
+  email: string,
+  code: string,
+): Promise<{ success: boolean; email?: string; username?: string }> {
+  return post("/api/local/auth/verify-otp", { email, code });
 }
 
-export async function postSync(): Promise<{ success: boolean; last_sync_at?: string; error?: string }> {
-  if (isDev) {
-    // In dev: fetch data from daemon, sync directly to local cloud API
-    const token = localStorage.getItem('useai_dev_token');
-    if (!token) throw new Error('Not authenticated');
-
-    const [sessions, milestones] = await Promise.all([fetchSessions(), fetchMilestones()]);
-    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
-
-    // Group sessions by date
-    const byDate = new Map<string, SessionSeal[]>();
-    for (const s of sessions) {
-      const date = s.started_at.slice(0, 10);
-      const arr = byDate.get(date);
-      if (arr) arr.push(s);
-      else byDate.set(date, [s]);
-    }
-
-    for (const [date, daySessions] of byDate) {
-      let totalSeconds = 0;
-      const clients: Record<string, number> = {};
-      const taskTypes: Record<string, number> = {};
-      const languages: Record<string, number> = {};
-
-      for (const s of daySessions) {
-        totalSeconds += s.duration_seconds;
-        clients[s.client] = (clients[s.client] ?? 0) + s.duration_seconds;
-        taskTypes[s.task_type] = (taskTypes[s.task_type] ?? 0) + s.duration_seconds;
-        for (const lang of s.languages) {
-          languages[lang] = (languages[lang] ?? 0) + s.duration_seconds;
-        }
-      }
-
-      const res = await fetch('/cloud-api/api/sync', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ date, total_seconds: totalSeconds, clients, task_types: taskTypes, languages, sessions: daySessions.map(({ prompt, prompt_images, ...rest }) => rest), sync_signature: '' }),
-      });
-      if (!res.ok) throw new Error(`Sync failed (${date}): ${res.status}`);
-    }
-
-    // Publish milestones
-    if (milestones.length > 0) {
-      const res = await fetch('/cloud-api/api/publish', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ milestones }),
-      });
-      if (!res.ok) throw new Error(`Milestones publish failed: ${res.status}`);
-    }
-
-    return { success: true, last_sync_at: new Date().toISOString() };
-  }
-  return post('/api/local/sync');
+export async function postSync(): Promise<{
+  success: boolean;
+  lastSyncAt?: string;
+  error?: string;
+}> {
+  return post("/api/local/sync");
 }
 
-export async function postLogout(): Promise<{ success: boolean }> {
-  if (isDev) {
-    localStorage.removeItem('useai_dev_token');
-    localStorage.removeItem('useai_dev_email');
-    localStorage.removeItem('useai_dev_username');
-  }
-  return post('/api/local/auth/logout');
+export function postLogout(): Promise<{ success: boolean }> {
+  return post("/api/local/auth/logout");
 }
 
 // ── Username ──────────────────────────────────────────────────────────────────
 
-export async function checkUsername(username: string): Promise<{ available: boolean; reason?: string }> {
-  const encoded = encodeURIComponent(username);
-  if (isDev) {
-    const token = localStorage.getItem('useai_dev_token');
-    const res = await fetch(`${API}/cloud-api/api/users/check-username/${encoded}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    return res.json() as Promise<{ available: boolean; reason?: string }>;
-  }
-  return get(`/api/local/users/check-username/${encoded}`);
+export function checkUsername(
+  username: string,
+): Promise<{ available: boolean; reason?: string }> {
+  return get(`/api/local/users/check-username/${encodeURIComponent(username)}`);
 }
 
-export async function updateUsername(username: string): Promise<{ username: string }> {
-  if (isDev) {
-    const token = localStorage.getItem('useai_dev_token');
-    if (!token) throw new Error('Not authenticated');
-    const res = await fetch(`${API}/cloud-api/api/users/me`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ username }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error((data as { message?: string }).message ?? `${res.status} ${res.statusText}`);
-    }
-    const data = await res.json() as { username: string };
-    localStorage.setItem('useai_dev_username', data.username);
-    return data;
-  }
-  return patch('/api/local/users/me', { username });
+export function updateUsername(
+  username: string,
+): Promise<{ username: string }> {
+  return patch("/api/local/users/me", { username });
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 
-export function deleteSession(sessionId: string): Promise<{ deleted: boolean; session_id: string; milestones_removed: number }> {
+export function deleteSession(sessionId: string): Promise<{
+  deleted: boolean;
+  session_id: string;
+  milestones_removed: number;
+}> {
   return del(`/api/local/sessions/${encodeURIComponent(sessionId)}`);
 }
 
-export function deleteConversation(conversationId: string): Promise<{ deleted: boolean; conversation_id: string; sessions_removed: number; milestones_removed: number }> {
-  return del(`/api/local/conversations/${encodeURIComponent(conversationId)}`);
+export function deleteConversation(connectionId: string): Promise<{
+  deleted: boolean;
+  conversation_id: string;
+  sessions_removed: number;
+  milestones_removed: number;
+}> {
+  return del(`/api/local/conversations/${encodeURIComponent(connectionId)}`);
 }
 
-export function deleteMilestone(milestoneId: string): Promise<{ deleted: boolean; milestone_id: string }> {
+export function deleteMilestone(
+  milestoneId: string,
+): Promise<{ deleted: boolean; milestone_id: string }> {
   return del(`/api/local/milestones/${encodeURIComponent(milestoneId)}`);
-}
-
-// ── Sync Logs ─────────────────────────────────────────────────────────────────
-
-export interface SyncLogEntry {
-  id: string;
-  timestamp: string;
-  event: 'sync' | 'auto_sync' | 'login' | 'logout' | 'cloud_pull';
-  status: 'success' | 'error' | 'info';
-  message: string;
-  details?: {
-    sessions_synced?: number;
-    milestones_published?: number;
-    dates_synced?: number;
-    sessions_corrected?: number;
-    sessions_corrupted?: number;
-    cloud_sessions?: number;
-    merged?: number;
-    error?: string;
-    [key: string]: unknown;
-  };
-  payload?: {
-    endpoint: string;
-    method: string;
-    body: unknown;
-  };
-}
-
-export function fetchLogs(): Promise<SyncLogEntry[]> {
-  return get('/api/local/logs');
 }
 
 // ── Config (full) ─────────────────────────────────────────────────────────────
 
 export interface FullConfig {
-  mode: 'local' | 'cloud';
+  mode: "local" | "cloud";
   capture: {
     prompt: boolean;
-    prompt_images: boolean;
-    evaluation: boolean;
-    evaluation_reasons: 'all' | 'below_perfect' | 'none';
-    milestones: boolean;
+    promptImages: boolean;
   };
   sync: {
-    enabled: boolean;
-    interval_hours: number;
-    include_stats: boolean;
-    include_details: boolean;
+    leaderboardStats: boolean;
+    evaluationReasons: "none" | "belowPerfect" | "all";
+    autoSync: boolean;
+    intervalHours: number;
   };
-  evaluation_framework: string;
   authenticated: boolean;
   email: string | null;
 }
 
-export function fetchFullConfig(): Promise<FullConfig> {
-  return get('/api/local/config/full');
-}
-
-export function patchConfig(updates: Record<string, unknown>): Promise<FullConfig & { instructions_updated?: string[] }> {
-  return patch('/api/local/config', updates);
-}
-
-// ── Organizations ─────────────────────────────────────────────────────────────
+// ── Organizations ─────────────────────────────────────────────────────────
 
 export interface UserOrg {
   org: { id: string; name: string; slug: string };
@@ -372,6 +353,41 @@ export interface UserOrg {
 }
 
 export function fetchMyOrgs(): Promise<UserOrg[]> {
-  if (isDev) return get('/cloud-api/api/orgs');
-  return get('/api/local/orgs');
+  return get("/api/local/orgs");
+}
+
+// ── Sync Logs ─────────────────────────────────────────────────────────────
+
+export interface SyncLogEntry {
+  id: string;
+  timestamp: string;
+  event: "sync" | "auto_sync" | "login" | "logout" | "cloud_pull";
+  status: "success" | "error" | "info";
+  message: string;
+  details?: {
+    sessions_synced?: number;
+    milestones_published?: number;
+    dates_synced?: number;
+    error?: string;
+    [key: string]: unknown;
+  };
+  payload?: {
+    method: string;
+    endpoint: string;
+    body: unknown;
+  };
+}
+
+export function fetchLogs(): Promise<SyncLogEntry[]> {
+  return get("/api/local/logs");
+}
+
+export function fetchFullConfig(): Promise<FullConfig> {
+  return get("/api/local/config/full");
+}
+
+export function patchConfig(
+  updates: Record<string, unknown>,
+): Promise<FullConfig & { instructionsUpdated?: string[] }> {
+  return patch("/api/local/config", updates);
 }

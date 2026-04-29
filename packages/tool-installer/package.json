@@ -1,0 +1,32 @@
+{
+  "name": "@devness/useai-tool-installer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./configs": "./dist/configs.js",
+    "./formats": "./dist/formats.js",
+    "./installer": "./dist/installer.js",
+    "./instructions": "./dist/instructions.js",
+    "./hooks": "./dist/hooks.js",
+    "./tool-matcher": "./dist/tool-matcher.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@devness/useai-storage": "workspace:*",
+    "@devness/useai-types": "workspace:*",
+    "smol-toml": "^1.3.0",
+    "yaml": "^2.6.0"
+  },
+  "devDependencies": {
+    "@clack/prompts": "^0.9.0",
+    "@types/node": "^22.0.0",
+    "vitest": "^3.0.0"
+  }
+}

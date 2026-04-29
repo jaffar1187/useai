@@ -1,38 +1,9 @@
 node_modules/
 dist/
-.next/
-*.tgz
-.DS_Store
-.env
-.env.local
 .turbo/
-.coverit/
-*.log
 *.tsbuildinfo
-
-# Drizzle migrations
-**/drizzle/
-
-# coverit
-test-results/
-playwright-report/
-.pytest_cache/
-
-# Genbox secrets
-.env.genbox
-.genbox/
-.uploads/
-
-# Copied into packages by publish script (npm needs them package-local)
-packages/mcp/README.md
-packages/mcp/LICENSE
-packages/cli/README.md
-packages/cli/LICENSE
-
-# Private packages (not open sourced)
-packages/api/
-packages/admin/
-packages/worker/
-
-**/e2e/report/
-**/e2e/test-results/*
+.env
+.env.*
+!**/.env.example
+!**/.env.*.example
+.DS_Store

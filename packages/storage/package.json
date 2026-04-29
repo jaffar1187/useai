@@ -1,0 +1,28 @@
+{
+  "name": "@devness/useai-storage",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./paths": "./dist/paths.js",
+    "./sessions": "./dist/sessions.js",
+    "./config": "./dist/config.js",
+    "./keystore": "./dist/keystore.js",
+    "./sync-log": "./dist/sync-log.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@devness/useai-types": "workspace:*",
+    "@devness/useai-crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "vitest": "^3.0.0"
+  }
+}
