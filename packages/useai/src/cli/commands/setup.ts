@@ -7,6 +7,8 @@ import {
   installTool,
   getAllToolConfigs,
 } from "@devness/useai-tool-installer";
+import { DAEMON_URL } from "@devness/useai-storage/paths";
+import { getDaemonStatus, startDaemonProcess } from "../services/daemon.service.js";
 
 export async function runSetup(opts: { yes?: boolean } = {}): Promise<void> {
   console.log();
@@ -45,10 +47,38 @@ export async function runSetup(opts: { yes?: boolean } = {}): Promise<void> {
     selected = result as string[];
   }
 
+  let installedCount = 0;
   for (const id of selected) {
     const res = await installTool(id);
-    if (res.success) p.log.success(res.message);
-    else             p.log.error(res.message);
+    if (res.success) {
+      p.log.success(res.message);
+      installedCount++;
+    } else {
+      p.log.error(res.message);
+    }
+  }
+
+  // Auto-start the daemon so the AI tools we just configured can connect immediately.
+  if (installedCount > 0) {
+    const status = await getDaemonStatus();
+    if (status.running) {
+      p.log.info(`Daemon already running at ${DAEMON_URL}`);
+    } else {
+      try {
+        startDaemonProcess();
+        // Wait briefly so the daemon has time to bind its port before we declare success.
+        await new Promise((r) => setTimeout(r, 1500));
+        const after = await getDaemonStatus();
+        if (after.running) {
+          p.log.success(`Daemon started at ${DAEMON_URL}`);
+        } else {
+          p.log.warn(`Daemon spawned but didn't respond yet — run \`useai daemon status\` to check.`);
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        p.log.error(`Failed to start daemon: ${msg}`);
+      }
+    }
   }
 
   p.outro(pc.green("  Done! Restart your AI tool and useai will track every session."));

@@ -15,6 +15,13 @@ export default defineConfig({
   sourcemap: false,
   minify: false,
   shims: true,
+  // Inline workspace deps so the published tarball doesn't reference any
+  // private @devness/useai-* packages. Everything else stays external and
+  // gets installed by npm normally.
   noExternal: [/^@devness\/useai-/],
+  // Force these transitive deps (pulled in by tool-installer for parsing
+  // YAML/TOML AI-tool configs) to stay external. Inlining them breaks because
+  // their CJS entry has require() calls that don't survive ESM bundling.
+  external: ["yaml", "smol-toml"],
   banner: { js: "#!/usr/bin/env node" },
 });

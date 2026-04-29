@@ -1,6 +1,6 @@
 {
   "name": "@devness/useai",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "useai.dev \u2014 Track and improve your AI coding sessions",
   "license": "AGPL-3.0-only",
@@ -36,6 +36,8 @@
     "commander": "^12.0.0",
     "hono": "^4.0.0",
     "picocolors": "^1.1.0",
+    "smol-toml": "^1.3.0",
+    "yaml": "^2.6.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

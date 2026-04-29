@@ -27,7 +27,7 @@ const program = new Command();
 program
   .name("useai")
   .description("Track and improve your AI coding sessions")
-  .version("1.0.0");
+  .version("1.0.1");
 
 // useai (no args) → run setup wizard
 program.action(async () => {
