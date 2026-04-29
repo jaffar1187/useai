@@ -1,4 +1,17 @@
 import { defineConfig } from "tsup";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+interface PackageJson {
+  version: string;
+}
+
+const pkg = JSON.parse(
+  readFileSync(join(__dirname, "package.json"), "utf-8"),
+) as PackageJson;
 
 // Bundle the CLI entry. Workspace deps (@devness/useai-*) get inlined so the
 // published tarball doesn't reference packages that aren't on npm. The library
@@ -23,5 +36,10 @@ export default defineConfig({
   // YAML/TOML AI-tool configs) to stay external. Inlining them breaks because
   // their CJS entry has require() calls that don't survive ESM bundling.
   external: ["yaml", "smol-toml"],
+  // Inject the version from package.json at bundle time so cli/index.ts can
+  // reference __VERSION__ instead of a hardcoded literal that drifts.
+  define: {
+    __VERSION__: JSON.stringify(pkg.version),
+  },
   banner: { js: "#!/usr/bin/env node" },
 });

@@ -23,6 +23,7 @@ import {
   rmSync,
   existsSync,
 } from "node:fs";
+// (USEAI_CLI_TS path removed — tsup's `define` replaces __VERSION__ at bundle time)
 import { execSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,7 +36,6 @@ const ROOT = join(__dirname, "..");
 const USEAI_DIR     = join(ROOT, "packages/useai");
 const USEAI_PKG     = join(USEAI_DIR, "package.json");
 const USEAI_DIST    = join(USEAI_DIR, "dist");
-const USEAI_CLI_TS  = join(USEAI_DIR, "src/cli/index.ts");
 const DASHBOARD_DIST = join(ROOT, "packages/dashboard/dist");
 const ROOT_README   = join(ROOT, "README.md");
 const ROOT_LICENSE  = join(ROOT, "LICENSE");
@@ -90,17 +90,8 @@ console.log("  Bumping version…");
 useaiPkg.version = nextVersion;
 writeJson(USEAI_PKG, useaiPkg);
 console.log(`    ✓ packages/useai/package.json`);
-
-// Keep the version baked into the CLI in sync with package.json.
-const cliSrc = readFileSync(USEAI_CLI_TS, "utf-8");
-const cliSrcUpdated = cliSrc.replace(
-  /\.version\(["'][^"']+["']\)/,
-  `.version("${nextVersion}")`,
-);
-if (cliSrcUpdated !== cliSrc) {
-  writeFileSync(USEAI_CLI_TS, cliSrcUpdated);
-  console.log(`    ✓ packages/useai/src/cli/index.ts (.version(...))`);
-}
+// The CLI's version string is injected at bundle time via tsup's `define`
+// (see tsup.config.ts). No source files to keep in sync.
 
 // ── 2. Clean dist ────────────────────────────────────────────────────────────
 

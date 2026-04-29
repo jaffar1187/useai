@@ -2,6 +2,9 @@ import { Command } from "commander";
 
 import { startDaemon } from "../daemon/app.js";
 
+// Injected by tsup at bundle time from packages/useai/package.json.
+declare const __VERSION__: string;
+
 import { registerSetup, runSetup } from "./commands/setup.js";
 import { registerUninstall }       from "./commands/uninstall.js";
 import { registerMcp }              from "./commands/mcp.js";
@@ -27,7 +30,7 @@ const program = new Command();
 program
   .name("useai")
   .description("Track and improve your AI coding sessions")
-  .version("1.0.1");
+  .version(__VERSION__);
 
 // useai (no args) → run setup wizard
 program.action(async () => {
