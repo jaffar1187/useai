@@ -14,7 +14,7 @@ export const updateRoutes = new Hono();
 
 updateRoutes.get("/", async (c) => {
   try {
-    const { stdout } = await execFileAsync("npm", ["view", "@devness/useai-cli", "version"]);
+    const { stdout } = await execFileAsync("npm", ["view", "@devness/useai", "version"]);
     const latestVersion = stdout.trim();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const pkg = require(resolve(__dirname, "../../package.json")) as { version: string };

@@ -25,25 +25,24 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Verify the package builds and tests pass before we ship anything.
       - run: pnpm build
+      - run: pnpm test
 
-      # Publish in dependency order
-      - name: Publish @devness/useai-types
-        run: pnpm --filter @devness/useai-types publish --no-git-checks --access public
+      # Verify the tag matches the package version we're about to publish.
+      - name: Verify tag matches package version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./packages/useai/package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)"
+            exit 1
+          fi
+
+      # publish.mjs handles: dashboard build, tsup bundle, dist/dashboard copy,
+      # README/LICENSE copy, devDeps strip, and pnpm publish with provenance.
+      - name: Publish @devness/useai
+        run: node scripts/publish.mjs "${GITHUB_REF_NAME#v}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish @devness/useai-dashboard
-        run: pnpm --filter @devness/useai-dashboard publish --no-git-checks --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish @devness/useai (MCP server)
-        run: pnpm --filter @devness/useai publish --no-git-checks --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish @devness/useai-cli
-        run: pnpm --filter @devness/useai-cli publish --no-git-checks --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"

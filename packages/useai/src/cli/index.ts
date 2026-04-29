@@ -1,5 +1,10 @@
-#!/usr/bin/env node
 import { Command } from "commander";
+
+import { startDaemon } from "../daemon/app.js";
+
+import { registerSetup, runSetup } from "./commands/setup.js";
+import { registerUninstall }       from "./commands/uninstall.js";
+import { registerMcp }              from "./commands/mcp.js";
 
 import { registerStats }      from "./commands/stats.js";
 import { registerStatus }     from "./commands/status.js";
@@ -17,21 +22,26 @@ import { registerDaemonRestart } from "./commands/daemon/restart.js";
 import { registerDaemonStatus }  from "./commands/daemon/status.js";
 import { registerDaemonLogs }    from "./commands/daemon/logs.js";
 
-import { registerMcpSetup }  from "./commands/mcp/setup.js";
-import { registerMcpRemove } from "./commands/mcp/remove.js";
-
 const program = new Command();
 
 program
   .name("useai")
   .description("Track and improve your AI coding sessions")
-  .version("0.1.0");
+  .version("1.0.0");
+
+// useai (no args) → run setup wizard
+program.action(async () => {
+  await runSetup({});
+});
 
 // Top-level commands
+registerSetup(program);
+registerUninstall(program);
+registerMcp(program);
+registerServe(program);
 registerStats(program);
 registerStatus(program);
 registerExport(program);
-registerServe(program);
 registerConfig(program);
 registerLogin(program);
 registerLogout(program);
@@ -49,12 +59,18 @@ registerDaemonRestart(daemon);
 registerDaemonStatus(daemon);
 registerDaemonLogs(daemon);
 
-// useai mcp <subcommand>
-const mcp = program
-  .command("mcp")
-  .description("Manage MCP installation in AI tools");
+// Hidden: useai daemon-run starts the HTTP server in-process. Used internally
+// by `useai daemon start` to spawn a detached background daemon — not for
+// direct user invocation.
+program
+  .command("daemon-run", { hidden: true })
+  .description("(internal) Run the daemon HTTP server in-process")
+  .action(async () => {
+    await startDaemon();
+  });
 
-registerMcpSetup(mcp);
-registerMcpRemove(mcp);
-
-program.parse();
+program.parseAsync().catch((err: unknown) => {
+  const msg = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`useai: ${msg}\n`);
+  process.exit(1);
+});

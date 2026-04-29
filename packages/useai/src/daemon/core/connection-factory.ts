@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { registerTools, createPromptContext } from "@devness/useai";
+import { registerTools } from "../../mcp-tools/mcp-tools.js";
+import { createPromptContext } from "../../core/prompt-context.js";
 import { connections } from "./connection-store.js";
 
 export async function createMcpConnection(): Promise<WebStandardStreamableHTTPServerTransport> {

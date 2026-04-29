@@ -9,14 +9,14 @@ import {
   isClaudeCodeHooksInstalled,
 } from "@devness/useai-tool-installer";
 
-export function registerMcpRemove(mcp: Command): void {
-  mcp
-    .command("remove")
-    .description("Remove useai MCP from AI tools")
+export function registerUninstall(program: Command): void {
+  program
+    .command("uninstall")
+    .description("Remove useai from your AI tools")
     .option("-y, --yes", "Remove from all configured tools without prompts")
     .action(async (opts: { yes?: boolean }) => {
       console.log();
-      p.intro(pc.bold("  useai mcp remove"));
+      p.intro(pc.bold("  useai uninstall"));
 
       const configured = getAllToolConfigs().filter((c) => isToolConfigured(c.id));
 

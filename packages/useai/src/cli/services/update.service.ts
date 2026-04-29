@@ -1,6 +1,6 @@
 import { execSync, spawn } from "node:child_process";
 
-const PACKAGE_NAME = "@devness/useai-cli";
+const PACKAGE_NAME = "@devness/useai";
 
 export interface UpdateInfo {
   current: string;

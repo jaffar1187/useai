@@ -1,0 +1,52 @@
+{
+  "name": "@devness/useai",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "useai.dev \u2014 Track and improve your AI coding sessions",
+  "license": "AGPL-3.0-only",
+  "author": "nabeelkausari",
+  "homepage": "https://useai.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devness-com/useai.git"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "bin": {
+    "useai": "./dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./tools": "./dist/mcp-tools/mcp-tools.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "bundle": "tsup",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.0",
+    "@hono/node-server": "^1.13.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "commander": "^12.0.0",
+    "hono": "^4.0.0",
+    "picocolors": "^1.1.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@devness/useai-cloud": "workspace:*",
+    "@devness/useai-crypto": "workspace:*",
+    "@devness/useai-storage": "workspace:*",
+    "@devness/useai-tool-installer": "workspace:*",
+    "@devness/useai-types": "workspace:*",
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "tsx": "^4.0.0",
+    "vitest": "^3.0.0"
+  }
+}

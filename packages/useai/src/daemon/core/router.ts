@@ -12,10 +12,20 @@ import { usersRoutes } from "../routes/users.js";
 import { aggregationsRoutes } from "../routes/aggregations.js";
 import { promptsRoutes } from "../routes/prompts.js";
 import { logsRoutes } from "../routes/logs.js";
+import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function resolveDashboardDir(): string {
+  // Production: dashboard dist is copied next to the bundled cli.js
+  // (publish.mjs copies packages/dashboard/dist/** into packages/useai/dist/dashboard/)
+  const bundled = resolve(__dirname, "dashboard");
+  if (existsSync(bundled)) return bundled;
+  // Dev: monorepo layout — daemon dist is at packages/daemon/dist/core/router.js
+  return resolve(__dirname, "../../../dashboard/dist");
+}
 
 export function createApp(): Hono {
   const app = new Hono();
@@ -48,8 +58,7 @@ export function createApp(): Hono {
   });
 
   // Serve dashboard SPA from the built dist directory
-  const dashboardDir = resolve(__dirname, "../../../dashboard/dist");
-  app.use("/*", serveStatic({ root: dashboardDir }));
+  app.use("/*", serveStatic({ root: resolveDashboardDir() }));
 
   return app;
 }

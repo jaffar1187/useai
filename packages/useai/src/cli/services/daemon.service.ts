@@ -1,7 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync, openSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { DAEMON_URL, DAEMON_PID_FILE, DAEMON_LOG_FILE } from "@devness/useai-storage/paths";
 
 export interface DaemonStatus {
@@ -46,33 +44,21 @@ export function readPid(): number | undefined {
   }
 }
 
-/** Resolve the daemon entry point (app.js) from the @devness/useai-daemon package */
-function resolveDaemonEntry(): string {
-  try {
-    // Try resolving from the workspace
-    const daemonPkg = resolve(
-      dirname(fileURLToPath(import.meta.url)),
-      "../../../daemon/dist/app.js",
-    );
-    if (existsSync(daemonPkg)) return daemonPkg;
-  } catch { /* ignore */ }
-
-  // Fallback: try require.resolve style
-  try {
-    const pkgPath = resolve(
-      dirname(fileURLToPath(import.meta.url)),
-      "../../../../node_modules/@devness/useai-daemon/dist/app.js",
-    );
-    if (existsSync(pkgPath)) return pkgPath;
-  } catch { /* ignore */ }
-
-  throw new Error("Could not find daemon entry point. Run 'pnpm build' first.");
-}
-
+/**
+ * Spawn the daemon as a detached child process.
+ *
+ * The daemon is just the same `useai` binary running its hidden `daemon-run`
+ * subcommand. This avoids needing a separate daemon entry file — `useai`'s
+ * tsup bundle already inlines the daemon code, so the same script can play
+ * both the CLI role and the long-lived server role.
+ */
 export function startDaemonProcess(): void {
-  const entry = resolveDaemonEntry();
+  const cliScript = process.argv[1];
+  if (!cliScript) {
+    throw new Error("Cannot resolve useai entry script (process.argv[1] is empty)");
+  }
   const logFd = openSync(DAEMON_LOG_FILE, "a");
-  const child = spawn("node", [entry], {
+  const child = spawn(process.execPath, [cliScript, "daemon-run"], {
     detached: true,
     stdio: ["ignore", logFd, logFd],
     env: { ...process.env },

@@ -25,6 +25,3 @@ export async function startDaemon(): Promise<void> {
     },
   );
 }
-
-// Run directly
-startDaemon();
