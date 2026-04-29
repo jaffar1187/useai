@@ -14,7 +14,7 @@ interface TabBarProps {
 }
 
 const tabs: { id: ActiveTab; label: string }[] = [
-  { id: 'prompts', label: 'Prompts' },
+  { id: 'prompts', label: 'Sessions' },
   { id: 'insights', label: 'Insights' },
 ];
 

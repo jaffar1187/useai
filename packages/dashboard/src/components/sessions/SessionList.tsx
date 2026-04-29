@@ -62,6 +62,25 @@ function ScoreNum({ score, decimal }: { score: number; decimal?: boolean }) {
   );
 }
 
+const SKELETON_TITLE_WIDTHS = ['85%', '62%', '78%', '54%', '70%', '88%'];
+
+function SessionCardSkeleton({ widthIndex = 0 }: { widthIndex?: number }) {
+  return (
+    <div className="mb-2 rounded-xl border border-border/50 bg-bg-surface-1/35">
+      <div className="flex items-center px-3.5 py-2.5 gap-3">
+        <div className="w-8 h-8 rounded-lg bg-bg-surface-3 animate-pulse flex-shrink-0" />
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div
+            className="h-3.5 rounded bg-bg-surface-3 animate-pulse"
+            style={{ width: SKELETON_TITLE_WIDTHS[widthIndex % SKELETON_TITLE_WIDTHS.length] }}
+          />
+          <div className="h-2.5 w-1/3 rounded bg-bg-surface-3/70 animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ConversationCard = memo(function ConversationCard({ group, defaultExpanded, globalShowPublic, showFullDate, highlightWords, onDeleteSession, onDeleteMilestone, onDeleteConversation }: { group: ConversationGroup; defaultExpanded: boolean; globalShowPublic?: boolean | undefined; showFullDate?: boolean | undefined; highlightWords?: string[] | undefined; onDeleteSession?: ((id: string) => void) | undefined; onDeleteMilestone?: ((id: string) => void) | undefined; onDeleteConversation?: ((id: string) => void) | undefined }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [localShowPublic, setLocalShowPublic] = useState(false);
@@ -313,11 +332,13 @@ interface SessionListProps {
   /** Called when user scrolls near the bottom — for server-side infinite scroll */
   onLoadMore?: (() => void) | undefined;
   hasMore?: boolean | undefined;
+  /** Server-side feed is currently loading — suppresses the empty-state flash */
+  loading?: boolean | undefined;
 }
 
 const BATCH_SIZE = 25;
 
-export function SessionList({ preGrouped, globalShowPublic, showFullDate, highlightWords, outsideWindowCounts, onNavigateNewer, onNavigateOlder, onDeleteSession, onDeleteConversation, onDeleteMilestone, onLoadMore, hasMore }: SessionListProps) {
+export function SessionList({ preGrouped, globalShowPublic, showFullDate, highlightWords, outsideWindowCounts, onNavigateNewer, onNavigateOlder, onDeleteSession, onDeleteConversation, onDeleteMilestone, onLoadMore, hasMore, loading }: SessionListProps) {
   // If pre-grouped conversations are provided, use them directly
   // Otherwise compute from raw sessions/milestones (legacy/search mode)
   const conversations = preGrouped ?? [];
@@ -354,6 +375,15 @@ export function SessionList({ preGrouped, globalShowPublic, showFullDate, highli
   }, [conversations, visibleCount, preGrouped, hasMore, onLoadMore]);
 
   if (conversations.length === 0) {
+    if (loading) {
+      return (
+        <div>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SessionCardSkeleton key={i} widthIndex={i} />
+          ))}
+        </div>
+      );
+    }
     const hasBefore = outsideWindowCounts && outsideWindowCounts.before > 0;
     const hasAfter = outsideWindowCounts && outsideWindowCounts.after > 0;
     return (

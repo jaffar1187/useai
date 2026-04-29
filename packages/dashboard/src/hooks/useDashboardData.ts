@@ -316,6 +316,7 @@ export function useDashboardData({
     filteredMilestones,
     allSessionsForStrip,
     activity,
+    hasStats: serverData !== null,
 
     // Feed
     feedConversations,

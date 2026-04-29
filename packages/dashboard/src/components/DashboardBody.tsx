@@ -165,6 +165,7 @@ export function DashboardBody({
         activeProjects={data.stats.activeProjects}
         selectedCard={selectedStatCard}
         onCardClick={setSelectedStatCard}
+        loading={!data.hasStats}
       />
 
       <StatDetailPanel
@@ -198,9 +199,9 @@ export function DashboardBody({
               </h2>
               <MetricChip
                 value={`${data.displaySessionCount}`}
-                label="Prompts"
-                title="Prompts"
-                description="Your direct messages to the AI plus any subagent calls it spawned — each one counts as a prompt."
+                label="Sessions"
+                title="Sessions"
+                description="Your direct messages to the AI plus any subagent calls it spawned — each one counts as a session."
               />
               {data.feedMetrics && (
                 <>
@@ -293,6 +294,7 @@ export function DashboardBody({
             onDeleteMilestone={undefined}
             onLoadMore={data.handleLoadMore}
             hasMore={data.feedHasMore}
+            loading={data.feedLoading}
           />
         </div>
       )}

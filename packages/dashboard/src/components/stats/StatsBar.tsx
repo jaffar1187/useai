@@ -112,6 +112,20 @@ function StatCard({
   );
 }
 
+function StatCardSkeleton() {
+  return (
+    <div className="px-3 py-2 rounded-lg border border-border/50 bg-bg-surface-1 flex items-center gap-2.5">
+      <div className="p-1.5 rounded-md bg-bg-surface-2">
+        <div className="w-3.5 h-3.5 rounded bg-bg-surface-3 animate-pulse" />
+      </div>
+      <div className="flex flex-col min-w-0 gap-1.5">
+        <div className="h-4 w-12 rounded bg-bg-surface-3 animate-pulse" />
+        <div className="h-2 w-16 rounded bg-bg-surface-3/70 animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
 interface StatsBarProps {
   totalHours: number;
   totalSessions: number;
@@ -128,6 +142,7 @@ interface StatsBarProps {
   activeProjects: number;
   selectedCard?: StatCardType;
   onCardClick?: (type: StatCardType) => void;
+  loading?: boolean;
 }
 
 export function StatsBar({
@@ -141,10 +156,21 @@ export function StatsBar({
   totalMilestones,
   selectedCard,
   onCardClick,
+  loading = false,
 }: StatsBarProps) {
   const handleClick = (type: Exclude<StatCardType, null>) => {
     onCardClick?.(selectedCard === type ? null : type);
   };
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-4 lg:grid-cols-7 gap-2 mb-4">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <StatCardSkeleton key={i} />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-4 lg:grid-cols-7 gap-2 mb-4">
