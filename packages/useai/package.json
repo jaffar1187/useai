@@ -1,8 +1,8 @@
 {
   "name": "@devness/useai",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
-  "description": "useai.dev \u2014 Track and improve your AI coding sessions",
+  "description": "useai.dev — Track and improve your AI coding sessions",
   "license": "AGPL-3.0-only",
   "author": "nabeelkausari",
   "homepage": "https://useai.dev",
