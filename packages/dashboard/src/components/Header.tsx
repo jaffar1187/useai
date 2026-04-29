@@ -1,17 +1,16 @@
 import { useState, useMemo, useRef } from 'react';
 import type { HealthInfo, UpdateInfo, LocalConfig } from '../lib/api';
 import { ArrowUpCircle, Copy, Check, Search, Sparkles } from 'lucide-react';
-import { UseAILogo, TabBar, StatusBadge } from '@useai/ui';
-import type { ActiveTab, ExternalNavLink } from '@useai/ui';
+import { UseAILogo } from './UseAILogo';
+import { TabBar } from './TabBar';
+import { StatusBadge } from './StatusBadge';
+import type { ActiveTab, ExternalNavLink } from '../lib/types';
 import { ProfileDropdown } from './ProfileDropdown';
 import type { ProfileDropdownHandle } from './ProfileDropdown';
 
 const UPDATE_COMMAND = 'npx -y @devness/useai update';
 
-const WEB_LINKS_WITH_PROFILE = (username: string): ExternalNavLink[] => [
-  { label: 'Leaderboard', href: 'https://useai.dev/leaderboard' },
-  { label: 'Profile', href: `https://useai.dev/${username}` },
-];
+const LEADERBOARD_LINK: ExternalNavLink = { label: 'Leaderboard', href: 'https://useai.dev/leaderboard' };
 
 function UpdateBanner({ updateInfo }: { updateInfo: UpdateInfo }) {
   const [showPopover, setShowPopover] = useState(false);
@@ -71,18 +70,18 @@ interface HeaderProps {
 export function Header({ health, updateInfo, onSearchOpen, activeTab, onTabChange, config, onRefresh }: HeaderProps) {
   const profileRef = useRef<ProfileDropdownHandle>(null);
 
-  const webLinks = useMemo(() => {
-    if (config?.username) return WEB_LINKS_WITH_PROFILE(config.username);
-    return undefined;
-  }, [config?.username]);
+  const webLinks = useMemo<ExternalNavLink[]>(() => {
+    if (!config?.authenticated) return [];
+    const links: ExternalNavLink[] = [LEADERBOARD_LINK];
+    if (config?.username) links.push({ label: 'Profile', href: `https://useai.dev/${config.username}` });
+    return links;
+  }, [config?.authenticated, config?.username]);
 
   return (
     <header className="sticky top-0 z-50 bg-bg-base/80 backdrop-blur-md border-b border-border mb-6">
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between relative">
         <div className="flex items-center gap-3">
-          <button onClick={() => onTabChange('sessions')} className="cursor-pointer" aria-label="Go to sessions">
-            <UseAILogo className="h-6" />
-          </button>
+          <UseAILogo className="h-6" />
           {health && health.active_sessions > 0 && (
             <StatusBadge
               label={`${health.active_sessions} active session${health.active_sessions !== 1 ? 's' : ''}`}
@@ -121,7 +120,7 @@ export function Header({ health, updateInfo, onSearchOpen, activeTab, onTabChang
           {updateInfo?.update_available && (
             <UpdateBanner updateInfo={updateInfo} />
           )}
-          <ProfileDropdown ref={profileRef} config={config} onRefresh={onRefresh} onTabChange={onTabChange} />
+          <ProfileDropdown ref={profileRef} config={config} onRefresh={onRefresh} />
         </div>
       </div>
     </header>

@@ -5,19 +5,21 @@
 [![license](https://img.shields.io/npm/l/@devness/useai.svg)](https://github.com/devness-com/useai/blob/main/LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/devness-com/useai)](https://github.com/devness-com/useai)
 
-**Track your AI coding sessions with privacy-first analytics.**
+**Track your AI coding sessions with local-first analytics.**
 
 UseAI is a local-first [MCP server](https://modelcontextprotocol.io/) that records how you use AI coding tools -- session duration, languages, task types, and streaks -- without ever seeing your code. Think of it as Wakatime for AI coding.
 
 ## Features
 
-- **Session tracking** -- automatically records when you start and stop using AI tools
+- **Prompt tracking** -- automatically records when you start and stop using AI tools
+- **Clock time vs AI time** -- deduped wall-clock time and total AI session time with multiplier
+- **Parallel sessions** -- run multiple AI sessions across projects, see peak concurrency
 - **Streak tracking** -- daily coding streaks with global leaderboard
-- **Evaluation metrics** -- sessions scored using the [SPACE framework](https://queue.acm.org/detail.cfm?id=3454124) for prompt quality, context, independence, and scope
-- **Local dashboard** -- built-in web UI served from the daemon (`useai serve`)
+- **AI proficiency** -- prompts evaluated on prompt quality, context, scope, and independence (1-5 scale)
+- **Local dashboard** -- built-in web UI served from the daemon
 - **Public profile & leaderboard** -- opt-in shareable profile at useai.dev with global AI proficiency rankings
-- **Privacy-first** -- everything stays in `~/.useai/` on your machine, zero network calls from the MCP server
-- **Ed25519 signed chain** -- every session record is cryptographically signed for tamper evidence
+- **Ed25519 signed chain** -- every prompt record is cryptographically sealed for tamper evidence
+- **Seal verification** -- real-time cloud verification at session end, only verified sessions count for leaderboard
 - **30+ AI tools supported** -- Claude Code, Cursor, Windsurf, VS Code, Codex, Gemini CLI, GitHub Copilot, Aider, Cline, Zed, Amazon Q, JetBrains/Junie, Goose, Roo Code, and [many more](https://useai.dev/explore)
 
 ## Quick Start
@@ -91,19 +93,19 @@ Add to your Windsurf MCP config:
 ```
 </details>
 
-> No API key needed. The MCP server runs 100% locally.
+> No API key needed. The MCP server runs locally on your machine.
 
 ## How It Works
 
-UseAI runs as an MCP (Model Context Protocol) server. When your AI tool starts a conversation, it calls `useai_start`. During the session, periodic `useai_heartbeat` calls keep the timer alive. When the conversation ends, `useai_end` seals the session with a cryptographic signature.
+UseAI runs as an MCP (Model Context Protocol) server. When your AI tool starts a conversation, it calls `useai_start`. During the session, periodic `useai_heartbeat` calls track active time intervals. When the conversation ends, `useai_end` seals the session with an Ed25519 signature and a seal verification call to the cloud.
 
-All data is written to `~/.useai/` as JSONL files. The MCP server makes zero network calls.
+All data is written to `~/.useai/` as date-based JSONL files (e.g. `2026-04-27.jsonl`).
 
 | MCP Tool | What it does |
 |----------|--------------|
-| `useai_start` | Begin tracking a session |
-| `useai_heartbeat` | Keep-alive during long sessions |
-| `useai_end` | End session, record milestones and evaluation |
+| `useai_start` | Begin tracking a prompt |
+| `useai_heartbeat` | Keep-alive during long prompts, tracks active time segments |
+| `useai_end` | End prompt, record milestones, evaluation, and seal verification |
 
 ### Daemon Mode
 
@@ -115,95 +117,84 @@ useai serve                   # Start daemon + local dashboard
 
 The setup wizard auto-configures the right mode (stdio or daemon) for each tool.
 
-## Evaluation Frameworks
-
-UseAI uses configurable **evaluation frameworks** to score each AI coding session. The framework controls what rubric the AI model uses when self-assessing session quality, producing a 0-100 session score.
-
-| Framework | Description |
-|-----------|-------------|
-| **SPACE** (default) | Based on the [SPACE developer productivity framework](https://queue.acm.org/detail.cfm?id=3454124) by GitHub/Microsoft Research. Weighted rubrics across Communication (prompt quality, context), Efficiency (independence), and Performance (scope). |
-| **Basic** | Simple equal-weight average across all dimensions. No detailed rubric guidance. |
-
-Session scores feed into the **AI Proficiency Score (APS)** -- a 0-1000 composite score across five dimensions: Output, Efficiency, Prompt Quality, Consistency, and Breadth.
-
-Change your framework:
-
-```bash
-useai config --framework space    # recommended
-useai config --framework raw      # basic/no rubric
-```
-
-The setup wizard (`npx @devness/useai`) also lets you pick a framework during installation.
-
 ## What Gets Tracked
 
 - Which AI tool you're using (Cursor, Claude Code, etc.)
-- Session duration and task type (coding, debugging, testing, etc.)
+- Prompt duration and task type (coding, debugging, testing, etc.)
+- Active time segments (for accurate clock time calculation)
 - Programming languages used
-- File count (number only, never file names)
-- Generic milestone descriptions (privacy-filtered by design)
-- Self-evaluation metrics (prompt quality, task outcome, independence)
+- Files touched count
+- Milestone descriptions (title, privateTitle, category, complexity)
+- Project name
+- Evaluation metrics (prompt quality, context, scope, independence, task outcome)
 
-**Never tracked:** your code, prompts, AI responses, file names, file paths, or directory structure.
+**Never tracked:** your code, prompts, or AI responses.
 
 ### What Gets Synced
 
-When you run `useai sync`, full session records (not just aggregates) are sent to the server. This includes all fields above plus `private_title` and `project` name. See [PRIVACY.md](PRIVACY.md) for the exact payload and what's publicly visible vs. private.
+When you sync, session metadata, titles, project names, evaluation scores, and milestones are sent to the server. Private titles and project names are only visible to you as the owner -- public profiles show aggregate stats only.
+
+### Seal Verification
+
+At the end of each prompt, a verification request is sent to the cloud with the session ID and timestamp. The server generates a unique signature -- proving the session was sealed in real-time. Only verified sessions count towards the leaderboard. If the cloud is unreachable, the session seals normally without verification.
+
+## AI Proficiency Score (APS)
+
+The APS is a composite 0-1000 score that aggregates your performance across multiple sessions. It combines five components:
+
+| Component | Weight | Description |
+|-----------|--------|-------------|
+| Output | 25% | Complexity-weighted milestones completed |
+| Efficiency | 25% | Complexity weight per hour of AI session time |
+| Prompt Quality | 20% | Average prompt quality, context, and scope scores |
+| Consistency | 15% | Active days ratio, streak, and session frequency |
+| Breadth | 15% | Unique languages, AI tools, and tool leverage |
+
+## Architecture
+
+UseAI is a modular monorepo:
+
+```
+packages/
+  types/          Pure types + zod schemas (zero deps)
+  crypto/         Ed25519 chain, keystore, verification
+  storage/        All filesystem I/O (sessions, config, paths)
+  scoring/        Evaluation frameworks
+  cloud/          Auth, sync, leaderboard API client
+  mcp-server/     3 MCP tools (start/heartbeat/end) -- published as @devness/useai
+  daemon/         Hono HTTP server, REST API routes, autostart, sync scheduler
+  dashboard/      React 19 + Zustand + Tailwind SPA
+  tool-installer/ Install/remove MCP config for 20+ AI tools
+  cli/            Full CLI (Commander.js)
+```
+
+**Tech stack:** TypeScript 5.7 (strict), ESM only, pnpm workspaces, Turborepo, Hono, React 19, Vite 6, Tailwind v3, Zustand v5, Zod, MCP SDK.
+
+## Privacy
+
+- **Local-first** -- data stored in `~/.useai/`, processing happens on your machine
+- **No code transmitted** -- source code, prompts, and AI responses never leave your machine
+- **Open source** -- audit exactly what gets recorded ([AGPL-3.0](LICENSE))
+- **Cryptographic chain** -- Ed25519 signed hash chain for tamper evidence
+- **Opt-in sync** -- data only leaves your machine when you choose to sync
+- **You own your data** -- export or delete date-based JSONL files at any time
+- **Seal verification** -- a lightweight API call at session end for leaderboard eligibility; if offline, session seals normally
 
 ## CLI
 
 ```bash
-useai stats         # View local stats: streaks, hours, tools, languages
-useai status        # See everything stored on your machine
+useai stats         # View local stats
 useai sync          # Sync sessions to useai.dev
-useai serve         # Start local analytics dashboard
+useai serve         # Start daemon + local dashboard
 useai config        # Manage settings
 ```
-
-Install globally:
-
-```bash
-npm install -g @devness/useai-cli
-```
-
-## Architecture
-
-UseAI is a monorepo with the following open source packages:
-
-```
-packages/
-  shared/       Core types, constants, Ed25519 crypto chain
-  mcp/          MCP server + HTTP daemon (published as @devness/useai)
-  cli/          CLI tool (published as @devness/useai-cli)
-  ui/           Shared React component library
-  dashboard/    Local analytics web UI
-  web/          Public website (useai.dev)
-```
-
-**Tech stack:** TypeScript, pnpm workspaces, Turborepo, Vitest, React 19, Tailwind v4.
-
-## Privacy
-
-UseAI is designed with privacy as architecture, not just policy:
-
-- **Local-first** -- MCP server writes to disk, never to the network
-- **Open source** -- audit exactly what gets recorded
-- **Cryptographic chain** -- Ed25519 signed hash chain for tamper evidence
-- **Opt-in sync** -- data only leaves your machine when you choose
-- **You own your data** -- export or delete at any time
-
-For a complete list of every field captured, what happens when you sync, and what's visible on your public profile, see [PRIVACY.md](PRIVACY.md). For details on the cryptographic chain, see [SECURITY.md](SECURITY.md).
-
-## Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions and guidelines.
 
 ## Links
 
 - Website: [useai.dev](https://useai.dev)
 - GitHub: [devness-com/useai](https://github.com/devness-com/useai)
 - npm: [@devness/useai](https://www.npmjs.com/package/@devness/useai)
-- Explore supported tools: [useai.dev/explore](https://useai.dev/explore)
+- Explore: [useai.dev/explore](https://useai.dev/explore)
 
 ## License
 

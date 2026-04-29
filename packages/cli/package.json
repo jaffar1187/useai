@@ -1,47 +1,30 @@
 {
   "name": "@devness/useai-cli",
-  "version": "0.9.6",
-  "description": "CLI tool for useai.dev — stats, sync, publish your AI development workflow",
-  "author": "nabeelkausari",
-  "license": "AGPL-3.0-only",
+  "version": "1.0.0",
   "type": "module",
+  "main": "./dist/index.js",
+  "files": ["dist"],
   "bin": {
     "useai": "./dist/index.js"
   },
-  "main": "./dist/index.js",
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "dev": "tsc --watch",
-    "bundle": "tsup src/index.ts --format esm --target node18 --no-splitting",
-    "prepublishOnly": "pnpm run bundle",
-    "typecheck": "tsc --noEmit -p tsconfig.build.json",
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "start": "node --env-file-if-exists=.env dist/index.js",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@clack/prompts": "^1.0.1",
-    "picocolors": "^1.1.1",
-    "commander": "^12.1.0",
-    "smol-toml": "^1.6.0",
-    "yaml": "^2.8.2"
+    "@devness/useai-types": "workspace:*",
+    "@devness/useai-storage": "workspace:*",
+    "@devness/useai-tool-installer": "workspace:*",
+    "@devness/useai-cloud": "workspace:*",
+    "@devness/useai-daemon": "workspace:*",
+    "commander": "^12.0.0",
+    "picocolors": "^1.1.0",
+    "@clack/prompts": "^0.9.0"
   },
   "devDependencies": {
-    "@types/node": "^22.13.4",
-    "@useai/shared": "workspace:*",
-    "tsup": "^8.0.0",
-    "typescript": "^5.7.3",
-    "vitest": "^4.0.18"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/devness-com/useai"
-  },
-  "homepage": "https://useai.dev",
-  "engines": {
-    "node": ">=18"
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0"
   }
 }

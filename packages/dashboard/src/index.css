@@ -1,0 +1,278 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ══════════════════════════════════════════════════════════════════════════ *
+ *  Design Tokens — Surface tokens (per-dashboard) + shared brand tokens    *
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+
+  /* ── Surface tokens (dashboard palette) ── */
+  --bg-base: #09090b;
+  --bg-base-rgb: 9, 9, 11;
+  --bg-surface-1: #111113;
+  --bg-surface-1-rgb: 17, 17, 19;
+  --bg-surface-2: #18181b;
+  --bg-surface-2-rgb: 24, 24, 27;
+  --bg-surface-3: #27272a;
+  --bg-surface-3-rgb: 39, 39, 42;
+  --border: #27272a;
+  --border-rgb: 39, 39, 42;
+  --glass-bg: rgba(17, 17, 19, 0.8);
+
+  /* ── Text ── */
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-secondary-rgb: 161, 161, 170;
+  --text-muted: #71717a;
+  --text-muted-rgb: 113, 113, 122;
+
+  /* ── Accent (lime neon) ── */
+  --accent: #b4f82c;
+  --accent-bright: #d4fc6e;
+  --accent-dim: #4d7c0f;
+  --accent-rgb: 180, 248, 44;
+
+  /* ── Semantic ── */
+  --success: #b4f82c;
+  --error: #ef4444;
+  --error-rgb: 239, 68, 68;
+
+  /* ── Streak (amber) ── */
+  --streak: #f59e0b;
+  --streak-rgb: 245, 158, 11;
+  --streak-bg: rgba(245, 158, 11, 0.06);
+  --streak-border: rgba(245, 158, 11, 0.2);
+  --streak-muted: rgba(245, 158, 11, 0.5);
+
+  /* ── History / time-travel (blue) ── */
+  --history: #60a5fa;
+  --history-rgb: 96, 165, 250;
+
+  /* ── Glass border ── */
+  --glass-border: rgba(255, 255, 255, 0.05);
+
+  /* ── Effects ── */
+  --grid-color: rgba(255, 255, 255, 0.08);
+  --glow-opacity: 0.15;
+  --glow-blue: rgba(59, 130, 246, 0.15);
+  --shadow-glow: rgba(var(--accent-rgb), 0.1);
+  --accent-alpha: rgba(var(--accent-rgb), 0.05);
+
+  /* ── --color-* bridge for SVG / inline style usage ── */
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface-1: var(--bg-surface-1);
+  --color-bg-surface-2: var(--bg-surface-2);
+  --color-bg-surface-3: var(--bg-surface-3);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-bright: var(--accent-bright);
+  --color-accent-dim: var(--accent-dim);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-streak: var(--streak);
+  --color-history: var(--history);
+  --color-border: var(--border);
+  --color-glass-bg: var(--glass-bg);
+  --color-glass-border: var(--glass-border);
+}
+
+/* ── Light theme ── */
+@media (prefers-color-scheme: light) {
+  :root {
+
+    --bg-base: #ffffff;
+    --bg-base-rgb: 255, 255, 255;
+    --bg-surface-1: #f4f4f5;
+    --bg-surface-1-rgb: 244, 244, 245;
+    --bg-surface-2: #e4e4e7;
+    --bg-surface-2-rgb: 228, 228, 231;
+    --bg-surface-3: #d4d4d8;
+    --bg-surface-3-rgb: 212, 212, 216;
+    --border: #e4e4e7;
+    --border-rgb: 228, 228, 231;
+    --glass-bg: rgba(255, 255, 255, 0.8);
+
+    --text-primary: #09090b;
+    --text-secondary: #52525b;
+    --text-secondary-rgb: 82, 82, 91;
+    --text-muted: #5f6068;
+    --text-muted-rgb: 95, 96, 104;
+
+    --accent: #65a30d;
+    --accent-bright: #84cc16;
+    --accent-dim: #f7fee7;
+    --accent-rgb: 101, 163, 13;
+
+    --success: #65a30d;
+    --error: #dc2626;
+    --error-rgb: 220, 38, 38;
+
+    --streak: #b45309;
+    --streak-rgb: 180, 83, 9;
+    --streak-bg: rgba(180, 83, 9, 0.06);
+    --streak-border: rgba(180, 83, 9, 0.2);
+    --streak-muted: rgba(180, 83, 9, 0.5);
+
+    --history: #2563eb;
+    --history-rgb: 37, 99, 235;
+
+    --glass-border: rgba(0, 0, 0, 0.05);
+
+    --grid-color: rgba(0, 0, 0, 0.04);
+    --glow-opacity: 0.25;
+    --glow-blue: rgba(59, 130, 246, 0.25);
+    --shadow-glow: rgba(0, 0, 0, 0.08);
+    --accent-alpha: rgba(var(--accent-rgb), 0.15);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ *
+ *  Base styles                                                              *
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  html {
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+  }
+
+  /* Remove webkit button appearance so CSS background-color fully controls button styling */
+  button {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  body {
+    @apply min-h-screen antialiased;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+  }
+
+  ::selection {
+    background-color: rgba(var(--accent-rgb), 0.3);
+    color: var(--accent-bright);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full;
+    background-color: var(--bg-surface-3);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--text-muted);
+  }
+
+  /* Force dark styling on native select elements without color-scheme */
+  select {
+    background-color: var(--bg-surface-2);
+    color: var(--text-primary);
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  select option {
+    background-color: var(--bg-surface-2);
+    color: var(--text-primary);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ *
+ *  Utility classes                                                          *
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+  /* Glass card — soft blur with subtle border (dashboard default) */
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  /* Glass panel — heavier blur with inset glow (hero sections) */
+  .glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    transform: translateZ(0);
+    will-change: transform, backdrop-filter;
+  }
+
+  /* HUD border — accent corner bracket with fading border */
+  .hud-border {
+    position: relative;
+    background: var(--bg-surface-1);
+  }
+  .hud-border::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border: 1px solid rgba(var(--accent-rgb), 0.2);
+    pointer-events: none;
+    border-radius: inherit;
+    mask-image: linear-gradient(to bottom, black, transparent);
+    -webkit-mask-image: linear-gradient(to bottom, black, transparent);
+  }
+  .hud-border::after {
+    content: "";
+    position: absolute;
+    top: -1px; left: -1px;
+    width: 10px; height: 10px;
+    border-top: 2px solid var(--accent);
+    border-left: 2px solid var(--accent);
+    border-top-left-radius: inherit;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .gradient-text-accent {
+    background: linear-gradient(135deg, var(--accent), var(--accent-bright));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 0 0 20px rgba(var(--accent-rgb), 0.4);
+  }
+
+  /* Subtle glow border — accent gradient behind element */
+  .subtle-glow {
+    position: relative;
+  }
+  .subtle-glow::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    background: linear-gradient(45deg, transparent, rgba(var(--accent-rgb), 0.1), transparent);
+    border-radius: inherit;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  /* Hide scrollbar utility */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}

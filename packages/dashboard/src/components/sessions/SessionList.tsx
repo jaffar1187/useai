@@ -1,0 +1,456 @@
+import { memo, useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp, Lock, Shield, Eye, EyeOff, Flag, FolderKanban, User, Bot } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import type { SessionSeal, Milestone } from '../../lib/api';
+import type { Filters } from '../../lib/types';
+import type { ConversationGroup } from '../../lib/stats';
+import { SessionCard } from './SessionCard';
+import { DeleteButton } from '../DeleteButton';
+import { TOOL_COLORS, TOOL_INITIALS, TOOL_ICONS, TOOL_DISPLAY_NAMES, resolveClient } from '../../constants/tools';
+import { HighlightText } from '../HighlightText';
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function computeCoveredSeconds(sessions: SessionSeal[]): number {
+  const events: { time: number; delta: number }[] = [];
+  for (const s of sessions) {
+    if (s.activeSegments && s.activeSegments.length > 0) {
+      for (const [start, end] of s.activeSegments) {
+        events.push({ time: new Date(start).getTime(), delta: 1 });
+        events.push({ time: new Date(end).getTime(), delta: -1 });
+      }
+    } else {
+      const sStart = new Date(s.startedAt).getTime();
+      events.push({ time: sStart, delta: 1 });
+      events.push({ time: sStart + s.durationMs, delta: -1 });
+    }
+  }
+  events.sort((a, b) => a.time - b.time || a.delta - b.delta);
+  let running = 0;
+  let coveredMs = 0;
+  let lastActiveStart = 0;
+  for (const e of events) {
+    const wasActive = running > 0;
+    running += e.delta;
+    if (!wasActive && running > 0) lastActiveStart = e.time;
+    else if (wasActive && running === 0) coveredMs += e.time - lastActiveStart;
+  }
+  return Math.round(coveredMs / 1000);
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function ScoreNum({ score, decimal }: { score: number; decimal?: boolean }) {
+  const isPerfect = score >= 5;
+  const colorClass = isPerfect ? 'text-text-secondary' : score >= 4 ? 'text-amber-500' : score >= 3 ? 'text-orange-500' : 'text-error';
+  const raw = decimal ? score.toFixed(1) : String(Math.round(score));
+  const display = raw.endsWith('.0') ? raw.slice(0, -2) : raw;
+  return (
+    <span className={`text-[10px] font-mono ${isPerfect ? '' : 'font-bold'}`} title={`${score.toFixed(1)}/5`}>
+      <span className={colorClass}>{display}</span>
+      <span className="text-text-muted/50">/5</span>
+    </span>
+  );
+}
+
+const ConversationCard = memo(function ConversationCard({ group, defaultExpanded, globalShowPublic, showFullDate, highlightWords, onDeleteSession, onDeleteMilestone, onDeleteConversation }: { group: ConversationGroup; defaultExpanded: boolean; globalShowPublic?: boolean | undefined; showFullDate?: boolean | undefined; highlightWords?: string[] | undefined; onDeleteSession?: ((id: string) => void) | undefined; onDeleteMilestone?: ((id: string) => void) | undefined; onDeleteConversation?: ((id: string) => void) | undefined }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [localShowPublic, setLocalShowPublic] = useState(false);
+  const showPublic = globalShowPublic || localShowPublic;
+  const isSingle = group.prompts.length === 1;
+
+  // For single-session conversations, just render the session card directly
+  if (isSingle) {
+    const pg = group.prompts[0]!;
+    return (
+      <SessionCard
+        session={pg.prompt}
+        milestones={pg.milestones ?? []}
+        defaultExpanded={defaultExpanded && (pg.milestones?.length ?? 0) > 0}
+        externalShowPublic={globalShowPublic || undefined}
+        showFullDate={showFullDate}
+        highlightWords={highlightWords}
+        onDeleteSession={onDeleteSession}
+        onDeleteMilestone={onDeleteMilestone}
+      />
+    );
+  }
+
+  // Multi-session conversation — show a wrapper
+  const client = resolveClient(group.prompts[0]!.prompt.client);
+  const color = TOOL_COLORS[client] ?? '#91919a';
+  const isCursor = client === 'cursor';
+  const iconColor = isCursor ? 'var(--text-primary)' : color;
+  const avatarStyle = isCursor
+    ? { backgroundColor: 'var(--bg-surface-2)', color: 'var(--text-primary)', border: '1px solid var(--border)' }
+    : { backgroundColor: `${color}15`, color, border: `1px solid ${color}30` };
+  const initials = TOOL_INITIALS[client] ?? client.slice(0, 2).toUpperCase();
+  const iconPath = TOOL_ICONS[client];
+  const agg = group.aggregateEval;
+  const avgScore = agg ? (agg.promptQuality + agg.contextProvided + agg.scopeQuality + agg.independenceLevel) / 4 : 0;
+
+  // Determine conversation titles from first (earliest) session
+  const firstSession = group.prompts[group.prompts.length - 1]!.prompt;
+  const privateConvTitle = firstSession.privateTitle || firstSession.title || firstSession.project || 'Conversation';
+  const publicConvTitle = firstSession.title || firstSession.project || 'Conversation';
+  const hasPrivacyDifference = privateConvTitle !== publicConvTitle;
+  const canTogglePrivacy = hasPrivacyDifference && !globalShowPublic;
+
+  // Derive project from conversation sessions
+  const UNTITLED_PROJECTS = ['untitled', 'mcp', 'unknown', 'default', 'none', 'null', 'undefined'];
+  const convProject = firstSession.project?.trim() || '';
+  const hasProject = !!convProject && !UNTITLED_PROJECTS.includes(convProject.toLowerCase());
+
+  return (
+    <div className={`group/conv mb-2 rounded-xl border transition-all duration-200 ${
+      expanded ? 'bg-bg-surface-1 border-accent/35 shadow-md' : 'bg-bg-surface-1/35 border-border/50 hover:border-accent/30'
+    }`}>
+      {/* Conversation header */}
+      <div className="flex items-center">
+        <button
+          className="flex-1 flex items-center gap-3 px-3.5 py-2.5 text-left min-w-0 cursor-pointer"
+          onClick={() => setExpanded(!expanded)}
+        >
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-black font-mono flex-shrink-0 shadow-sm"
+            style={avatarStyle}
+            title={TOOL_DISPLAY_NAMES[client] ?? client}
+          >
+            {iconPath ? (
+              <div
+                className="w-4 h-4"
+                style={{
+                  backgroundColor: iconColor,
+                  maskImage: `url(${iconPath})`,
+                  maskSize: 'contain',
+                  maskRepeat: 'no-repeat',
+                  maskPosition: 'center',
+                  WebkitMaskImage: `url(${iconPath})`,
+                  WebkitMaskSize: 'contain',
+                  WebkitMaskRepeat: 'no-repeat',
+                  WebkitMaskPosition: 'center',
+                }}
+              />
+            ) : (
+              initials
+            )}
+          </div>
+
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={showPublic ? 'public' : 'private'}
+                    initial={{ opacity: 0, x: -5 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 5 }}
+                    transition={{ duration: 0.1 }}
+                    className="flex items-center gap-1.5 min-w-0"
+                  >
+                    {showPublic ? (
+                      <Shield className="w-3 h-3 text-success/70 flex-shrink-0" />
+                    ) : (
+                      <Lock className="w-3 h-3 text-accent/70 flex-shrink-0" />
+                    )}
+                    <span className="text-[15px] font-semibold truncate text-text-primary tracking-tight leading-tight">
+                      <HighlightText text={showPublic ? publicConvTitle : privateConvTitle} words={highlightWords} />
+                    </span>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              <span className="text-[10px] font-bold text-accent/90 bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20 flex-shrink-0">
+                {group.prompts.length} prompts
+              </span>
+
+            </div>
+
+            <div className="flex items-center gap-3.5 text-[11px] text-text-secondary font-medium">
+              <span className="flex items-center gap-1.5" title="User time">
+                <User className="w-3 h-3 opacity-75" />
+                {formatDuration(computeCoveredSeconds(group.prompts.map(pg => pg.prompt)))}
+              </span>
+              <span className="flex items-center gap-1.5" title="AI time">
+                <Bot className="w-3 h-3 opacity-75" />
+                {formatDuration(group.aiTime)}
+              </span>
+
+              <span className="text-text-secondary/80 font-mono tracking-tight">
+                {showFullDate && `${new Date(group.startedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })} · `}
+                {formatTime(group.startedAt)} — {formatTime(group.endedAt)}
+              </span>
+
+              {!showPublic && hasProject && (
+                <span className="flex items-center gap-1 text-text-secondary/85" title={`Project: ${convProject}`}>
+                  <FolderKanban className="w-2.5 h-2.5 opacity-70" />
+                  <span className="max-w-[130px] truncate">{convProject}</span>
+                </span>
+              )}
+
+              {group.totalMilestones > 0 && (
+                <span className="flex items-center gap-1 text-text-secondary/85" title={`${group.totalMilestones} milestone${group.totalMilestones !== 1 ? 's' : ''}`}>
+                  <Flag className="w-2.5 h-2.5 opacity-70" />
+                  {group.totalMilestones}
+                </span>
+              )}
+
+              {agg && <ScoreNum score={avgScore} decimal />}
+            </div>
+          </div>
+        </button>
+
+        {/* Action strip */}
+        <div className="flex items-center px-2.5 gap-1.5 border-l border-border/30 h-9 self-center">
+          {onDeleteConversation && group.connectionId && (
+            <DeleteButton
+              onDelete={() => onDeleteConversation(group.connectionId!)}
+              className="opacity-0 group-hover/conv:opacity-100 focus-within:opacity-100"
+            />
+          )}
+          {canTogglePrivacy && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setLocalShowPublic(!localShowPublic);
+              }}
+              className={`p-1.5 rounded-lg transition-all ${
+                showPublic ? 'bg-success/10 text-success' : 'text-text-secondary hover:text-text-primary hover:bg-bg-surface-2'
+              }`}
+              title={showPublic ? 'Public title shown' : 'Private title shown'}
+              aria-label={showPublic ? 'Show private title' : 'Show public title'}
+            >
+              {showPublic ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            </button>
+          )}
+
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className={`p-1.5 rounded-lg transition-all ${
+              expanded ? 'text-accent bg-accent/8' : 'text-text-secondary hover:text-text-primary hover:bg-bg-surface-2'
+            }`}
+            title={expanded ? 'Collapse conversation' : 'Expand conversation'}
+            aria-label={expanded ? 'Collapse conversation' : 'Expand conversation'}
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded: show individual sessions with a thread line */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-3.5 pb-2.5 relative">
+              {/* Thread connector line */}
+              <div
+                className="absolute left-[1.75rem] top-0 bottom-2 w-px"
+                style={{ backgroundColor: `${color}25` }}
+              />
+              <div className="space-y-1 pl-10">
+                {group.prompts.map((pg) => (
+                  <div key={pg.prompt.promptId} className="relative">
+                    {/* Dot on thread line */}
+                    <div
+                      className="absolute -left-7 top-5 w-2 h-2 rounded-full border-2"
+                      style={{ backgroundColor: color, borderColor: `${color}40` }}
+                    />
+                    <SessionCard
+                      session={pg.prompt}
+                      milestones={pg.milestones ?? []}
+                      defaultExpanded={false}
+                      externalShowPublic={showPublic || undefined}
+                      hideClientAvatar
+                      hideProject
+                      showFullDate={showFullDate}
+                      highlightWords={highlightWords}
+                      onDeleteSession={onDeleteSession}
+                      onDeleteMilestone={onDeleteMilestone}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
+interface SessionListProps {
+  /** Raw sessions — used when preGrouped is not provided (legacy/search mode) */
+  sessions?: SessionSeal[] | undefined;
+  /** Raw milestones — used when preGrouped is not provided (legacy/search mode) */
+  milestones?: Milestone[] | undefined;
+  /** Pre-grouped conversations from server feed endpoint */
+  preGrouped?: ConversationGroup[] | undefined;
+  filters: Filters;
+  globalShowPublic?: boolean | undefined;
+  showFullDate?: boolean | undefined;
+  highlightWords?: string[] | undefined;
+  outsideWindowCounts?: { before: number; after: number; newerLabel?: string; olderLabel?: string } | undefined;
+  onNavigateNewer?: (() => void) | undefined;
+  onNavigateOlder?: (() => void) | undefined;
+  onDeleteSession?: ((sessionId: string) => void) | undefined;
+  onDeleteConversation?: ((connectionId: string) => void) | undefined;
+  onDeleteMilestone?: ((milestoneId: string) => void) | undefined;
+  /** Called when user scrolls near the bottom — for server-side infinite scroll */
+  onLoadMore?: (() => void) | undefined;
+  hasMore?: boolean | undefined;
+}
+
+const BATCH_SIZE = 25;
+
+export function SessionList({ preGrouped, globalShowPublic, showFullDate, highlightWords, outsideWindowCounts, onNavigateNewer, onNavigateOlder, onDeleteSession, onDeleteConversation, onDeleteMilestone, onLoadMore, hasMore }: SessionListProps) {
+  // If pre-grouped conversations are provided, use them directly
+  // Otherwise compute from raw sessions/milestones (legacy/search mode)
+  const conversations = preGrouped ?? [];
+
+  // Progressive rendering — show conversations in batches
+  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when the conversation list changes (time window / filter change)
+  useEffect(() => {
+    setVisibleCount(BATCH_SIZE);
+  }, [conversations]);
+
+  // IntersectionObserver to load more batches on scroll
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          if (preGrouped && hasMore && onLoadMore) {
+            // Server-side pagination — fetch next page
+            onLoadMore();
+          } else {
+            // Client-side progressive rendering
+            setVisibleCount((prev) => prev + BATCH_SIZE);
+          }
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [conversations, visibleCount, preGrouped, hasMore, onLoadMore]);
+
+  if (conversations.length === 0) {
+    const hasBefore = outsideWindowCounts && outsideWindowCounts.before > 0;
+    const hasAfter = outsideWindowCounts && outsideWindowCounts.after > 0;
+    return (
+      <div className="text-center text-text-muted py-8 text-sm mb-4 space-y-3">
+        {hasAfter && (
+          <button
+            onClick={onNavigateNewer}
+            className="flex flex-col items-center gap-0.5 mx-auto text-[11px] text-text-muted/60 hover:text-accent transition-colors group"
+          >
+            <ChevronUp className="w-3.5 h-3.5" />
+            <span>{outsideWindowCounts!.after} newer session{outsideWindowCounts!.after !== 1 ? 's' : ''}</span>
+            {outsideWindowCounts!.newerLabel && (
+              <span className="text-[10px] opacity-70 group-hover:opacity-100">{outsideWindowCounts!.newerLabel}</span>
+            )}
+          </button>
+        )}
+        <div>No sessions in this window</div>
+        {hasBefore && (
+          <button
+            onClick={onNavigateOlder}
+            className="flex flex-col items-center gap-0.5 mx-auto text-[11px] text-text-muted/60 hover:text-accent transition-colors group"
+          >
+            {outsideWindowCounts!.olderLabel && (
+              <span className="text-[10px] opacity-70 group-hover:opacity-100">{outsideWindowCounts!.olderLabel}</span>
+            )}
+            <span>{outsideWindowCounts!.before} older session{outsideWindowCounts!.before !== 1 ? 's' : ''}</span>
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const isTruncated = visibleCount < conversations.length;
+  const visible = isTruncated ? conversations.slice(0, visibleCount) : conversations;
+
+  return (
+    <div className="space-y-2 mb-4">
+      {outsideWindowCounts && outsideWindowCounts.after > 0 && (
+        <button
+          onClick={onNavigateNewer}
+          className="flex flex-col items-center gap-0.5 w-full text-[11px] text-text-muted/60 hover:text-accent py-1.5 transition-colors group"
+        >
+          <ChevronUp className="w-3.5 h-3.5" />
+          <span>{outsideWindowCounts.after} newer session{outsideWindowCounts.after !== 1 ? 's' : ''}</span>
+          {outsideWindowCounts.newerLabel && (
+            <span className="text-[10px] opacity-70 group-hover:opacity-100">{outsideWindowCounts.newerLabel}</span>
+          )}
+        </button>
+      )}
+
+      {visible.map((conv, i) => (
+        <ConversationCard
+          key={conv.connectionId || `conv-${i}`}
+          group={conv}
+          defaultExpanded={false}
+          globalShowPublic={globalShowPublic}
+          showFullDate={showFullDate}
+          highlightWords={highlightWords}
+          onDeleteSession={onDeleteSession}
+          onDeleteMilestone={onDeleteMilestone}
+          onDeleteConversation={onDeleteConversation}
+        />
+      ))}
+
+      {/* Sentinel for IntersectionObserver — triggers next batch (client or server) */}
+      {(isTruncated || hasMore) && <div ref={sentinelRef} className="h-px" />}
+
+      {/* Footer showing progress */}
+      {conversations.length > BATCH_SIZE && (
+        <div className="flex items-center justify-center gap-3 py-2 text-[11px] text-text-muted">
+          <span>
+            Showing {Math.min(visibleCount, conversations.length)} of {conversations.length} conversations
+          </span>
+          {isTruncated && (
+            <button
+              onClick={() => setVisibleCount(conversations.length)}
+              className="text-accent hover:text-accent/80 font-semibold transition-colors"
+            >
+              Show all
+            </button>
+          )}
+        </div>
+      )}
+
+      {outsideWindowCounts && outsideWindowCounts.before > 0 && (
+        <button
+          onClick={onNavigateOlder}
+          className="flex flex-col items-center gap-0.5 w-full text-[11px] text-text-muted/60 hover:text-accent py-1.5 transition-colors group"
+        >
+          {outsideWindowCounts.olderLabel && (
+            <span className="text-[10px] opacity-70 group-hover:opacity-100">{outsideWindowCounts.olderLabel}</span>
+          )}
+          <span>{outsideWindowCounts.before} older session{outsideWindowCounts.before !== 1 ? 's' : ''}</span>
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}

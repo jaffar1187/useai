@@ -1,89 +1,88 @@
-import { Command } from 'commander';
-import pc from 'picocolors';
-import { getFrameworkIds } from '@useai/shared';
-import { getUserMode } from '@useai/shared/types';
-import { getConfig, updateConfig } from '../services/config.service.js';
-import { reinjectInstructions } from '../services/tools.js';
-import { header, table, success, error, info } from '../utils/display.js';
+import type { Command } from "commander";
+import { getConfig, patchConfig, saveConfig } from "@devness/useai-storage";
+import { UseaiConfigSchema } from "@devness/useai-types/config";
+import { header, success, fail, label, dim } from "../utils/display.js";
 
-export const configCommand = new Command('config')
-  .description('View or update settings')
-  .option('--sync', 'Enable auto-sync')
-  .option('--no-sync', 'Disable auto-sync')
-  .option('--milestones', 'Enable milestone tracking')
-  .option('--no-milestones', 'Disable milestone tracking')
-  .option('--framework <name>', 'Set evaluation framework: space (recommended), raw (basic)')
-  .action((opts) => {
-    let changed = false;
+export function registerConfig(program: Command): void {
+  const config = program
+    .command("config")
+    .description("Manage configuration");
 
-    if (process.argv.includes('--no-sync')) {
-      const cfg = getConfig();
-      cfg.sync.enabled = false;
-      updateConfig(cfg);
-      console.log(success('Cloud sync disabled.'));
-      changed = true;
-    } else if (process.argv.includes('--sync')) {
-      const cfg = getConfig();
-      cfg.sync.enabled = true;
-      updateConfig(cfg);
-      console.log(success('Cloud sync enabled.'));
-      changed = true;
-    }
-
-    if (process.argv.includes('--no-milestones')) {
-      const cfg = getConfig();
-      cfg.capture.milestones = false;
-      updateConfig(cfg);
-      console.log(success('Milestone tracking disabled.'));
-      changed = true;
-    } else if (process.argv.includes('--milestones')) {
-      const cfg = getConfig();
-      cfg.capture.milestones = true;
-      updateConfig(cfg);
-      console.log(success('Milestone tracking enabled.'));
-      changed = true;
-    }
-
-    if (opts.framework) {
-      const validIds = getFrameworkIds();
-      if (!validIds.includes(opts.framework)) {
-        console.log(error(`Unknown framework: ${opts.framework}. Valid: ${validIds.join(', ')}`));
-      } else {
-        updateConfig({ evaluation_framework: opts.framework });
-        console.log(success(`Evaluation framework set to ${pc.bold(opts.framework)}.`));
-
-        // Re-inject instructions into configured tools with new framework text
-        const results = reinjectInstructions(opts.framework);
-        if (results.length > 0) {
-          for (const r of results) {
-            console.log(r.ok ? info(`  ↻ ${r.tool} instructions updated`) : error(`  ✗ ${r.tool}`));
-          }
+  config
+    .command("get [key]")
+    .description("Get config value(s)")
+    .action(async (key?: string) => {
+      header("Config");
+      const cfg = await getConfig();
+      if (key) {
+        const parts = key.split(".");
+        let val: unknown = cfg;
+        for (const part of parts) {
+          val = (val as Record<string, unknown>)[part];
         }
-        changed = true;
+        label(key, JSON.stringify(val));
+      } else {
+        printConfig(cfg, "");
       }
+      console.log();
+    });
+
+  config
+    .command("set <key> <value>")
+    .description("Set a config value (dot-notation key)")
+    .action(async (key: string, value: string) => {
+      try {
+        const patch = buildPatch(key, parseValue(value));
+        await patchConfig(patch);
+        success(`Set ${key} = ${value}`);
+      } catch (err) {
+        fail(`Failed to set config: ${err}`);
+      }
+      console.log();
+    });
+
+  config
+    .command("reset")
+    .description("Reset config to defaults")
+    .action(async () => {
+      const defaults = UseaiConfigSchema.parse({});
+      await saveConfig(defaults);
+      success("Config reset to defaults.");
+      console.log();
+    });
+}
+
+function printConfig(obj: unknown, prefix: string): void {
+  if (typeof obj !== "object" || obj === null) {
+    label(prefix, JSON.stringify(obj));
+    return;
+  }
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    const fullKey = prefix ? `${prefix}.${k}` : k;
+    if (typeof v === "object" && v !== null) {
+      printConfig(v, fullKey);
+    } else {
+      label(fullKey, JSON.stringify(v) ?? dim("null"));
     }
+  }
+}
 
-    const config = getConfig();
+function parseValue(raw: string): unknown {
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  if (!isNaN(Number(raw))) return Number(raw);
+  return raw;
+}
 
-    if (!changed) {
-      const mode = getUserMode(config);
-      const modeDisplay = mode === 'cloud'
-        ? pc.green('Cloud') + pc.dim(` · @${config.auth!.user.username ?? config.auth!.user.email}`)
-        : pc.cyan('Local');
-
-      console.log(header('Current Settings'));
-      console.log(
-        table([
-          ['Mode', modeDisplay],
-          ['Milestone tracking', config.capture.milestones ? pc.green('on') : pc.red('off')],
-          ['Prompt capture', config.capture.prompt ? pc.green('on') : pc.red('off')],
-          ['Eval reasons', config.capture.evaluation_reasons],
-          ['Cloud sync', config.sync.enabled ? pc.green('on') : pc.red('off')],
-          ['Eval framework', pc.cyan(config.evaluation_framework ?? 'space')],
-          ['Sync interval', `${config.sync.interval_hours}h`],
-          ['Last sync', config.last_sync_at ?? pc.dim('never')],
-        ]),
-      );
-      console.log('');
-    }
-  });
+function buildPatch(key: string, value: unknown): Record<string, unknown> {
+  const parts = key.split(".");
+  const result: Record<string, unknown> = {};
+  let cur = result;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i]!;
+    cur[part] = {};
+    cur = cur[part] as Record<string, unknown>;
+  }
+  cur[parts[parts.length - 1]!] = value;
+  return result;
+}

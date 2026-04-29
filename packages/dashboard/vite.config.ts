@@ -1,31 +1,17 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { viteSingleFile } from 'vite-plugin-singlefile';
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  plugins: [react(), viteSingleFile()],
+  plugins: [react()],
   server: {
-    port: 5174,
+    port: 5173,
     proxy: {
-      // Cloud API proxy (dev only) — auth & sync bypass the daemon
-      '/cloud-api': {
-        target: 'http://localhost:3010',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/cloud-api/, ''),
-      },
-      // Everything else goes to the production daemon
-      '/api': {
-        target: 'http://127.0.0.1:19200',
-        changeOrigin: true,
-      },
-      '/health': {
-        target: 'http://127.0.0.1:19200',
-        changeOrigin: true,
-      },
+      "/api": "http://127.0.0.1:19200",
+      "/health": "http://127.0.0.1:19200",
     },
   },
   build: {
-    target: 'es2020',
-    minify: 'terser',
+    outDir: "dist",
+    sourcemap: false,
   },
 });

@@ -1,10 +1,50 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Camera, BarChart3, Cloud, AlertTriangle, ChevronDown, Save, Check, Loader2, HardDrive, CloudUpload, Globe, Lock, ScrollText, HelpCircle } from 'lucide-react';
-import type { ActiveTab } from '@useai/ui';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Camera, Cloud, AlertTriangle, ChevronDown, Save, Check, Loader2, HardDrive, CloudUpload, ScrollText, Info, ShieldCheck } from 'lucide-react';
 import type { FullConfig, UserOrg } from '../lib/api';
 import { fetchFullConfig, patchConfig, fetchMyOrgs } from '../lib/api';
+import { useDashboardStore } from '../store';
 
 // ── Inline sub-components ───────────────────────────────────────────────────
+
+function InfoTooltip({ fields, example }: { fields: string[]; example?: string | undefined }) {
+  const [show, setShow] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!show) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setShow(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [show]);
+
+  return (
+    <span className="relative inline-flex" ref={ref}>
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShow(v => !v); }}
+        className="p-0.5 rounded-full text-text-muted/50 hover:text-text-muted transition-colors cursor-pointer"
+      >
+        <Info className="w-3 h-3" />
+      </button>
+      {show && (
+        <div className="absolute left-5 bottom-0 z-[100] w-52 p-2 rounded-md border shadow-lg text-[10px] leading-relaxed max-h-72 overflow-y-auto" style={{ backgroundColor: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-muted)', opacity: 1 }}>
+          <div className="font-medium text-text-secondary mb-1">Fields synced:</div>
+          <div className="font-mono space-y-0.5">
+            {fields.map(f => <div key={f}>{f}</div>)}
+          </div>
+          {example && (
+            <div className="mt-1.5 pt-1.5 border-t border-border/30">
+              <div className="font-medium text-text-secondary mb-0.5">Example:</div>
+              <div className="text-text-muted/80 italic">{example}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </span>
+  );
+}
 
 function SettingToggle({
   label,
@@ -13,19 +53,26 @@ function SettingToggle({
   onChange,
   warning,
   disabled,
+  info,
+  example,
 }: {
   label: string;
-  description: string;
+  description?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   warning?: string;
   disabled?: boolean;
+  info?: string[];
+  example?: string;
 }) {
   return (
-    <label className={`flex items-start justify-between gap-3 py-2 group ${disabled ? 'cursor-default opacity-60' : 'cursor-pointer'}`}>
+    <label className={`flex items-start justify-between gap-3 py-2 group ${disabled ? 'cursor-default' : 'cursor-pointer'}`}>
       <div className="flex-1 min-w-0">
-        <div className="text-xs font-medium text-text-primary">{label}</div>
-        <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">{description}</div>
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-medium text-text-primary">{label}</span>
+          {info && <InfoTooltip fields={info} example={example} />}
+        </div>
+        {description && <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">{description}</div>}
         {warning && checked && (
           <div className="flex items-center gap-1 mt-1 text-[11px] text-warning">
             <AlertTriangle className="w-3 h-3 shrink-0" />
@@ -40,7 +87,7 @@ function SettingToggle({
         onClick={() => !disabled && onChange(!checked)}
         className={`
           relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200
-          ${checked ? 'bg-text-muted' : 'bg-bg-surface-2'}
+          ${checked ? 'bg-[#52525b]' : 'bg-bg-surface-2'}
           ${disabled ? 'cursor-not-allowed' : ''}
         `}
       >
@@ -61,18 +108,25 @@ function SettingSelect({
   value,
   options,
   onChange,
+  info,
+  example,
 }: {
   label: string;
-  description: string;
+  description?: string;
   value: string;
   options: { value: string; label: string }[];
   onChange: (v: string) => void;
+  info?: string[];
+  example?: string;
 }) {
   return (
     <div className="flex items-start justify-between gap-3 py-2">
       <div className="flex-1 min-w-0">
-        <div className="text-xs font-medium text-text-primary">{label}</div>
-        <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">{description}</div>
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-medium text-text-primary">{label}</span>
+          {info && <InfoTooltip fields={info} example={example} />}
+        </div>
+        {description && <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">{description}</div>}
       </div>
       <div className="relative">
         <select
@@ -102,7 +156,8 @@ function configsEqual(a: FullConfig, b: FullConfig): boolean {
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
-export function SettingsPage({ onTabChange }: { onTabChange?: (tab: ActiveTab) => void }) {
+export function SettingsPage({ onTabChange }: { onTabChange?: (tab: string) => void }) {
+  const storeConfig = useDashboardStore((s) => s.config);
   const [saved, setSaved] = useState<FullConfig | null>(null); // last-saved config from server
   const [draft, setDraft] = useState<FullConfig | null>(null); // local draft being edited
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -116,12 +171,12 @@ export function SettingsPage({ onTabChange }: { onTabChange?: (tab: ActiveTab) =
         setSaved(c);
         setDraft(structuredClone(c));
         if (c.authenticated) fetchMyOrgs().then(data => {
-          // Validate shape — API may return flat objects instead of { org: {...}, role }
           if (Array.isArray(data)) setOrgs(data.filter(o => o?.org?.id));
         }).catch(() => {});
+        if (!c.authenticated) setOrgs([]);
       })
       .catch((err) => setError((err as Error).message));
-  }, []);
+  }, [storeConfig?.authenticated]);
 
   const isDirty = saved && draft ? !configsEqual(saved, draft) : false;
 
@@ -133,12 +188,11 @@ export function SettingsPage({ onTabChange }: { onTabChange?: (tab: ActiveTab) =
       const result = await patchConfig({
         capture: draft.capture,
         sync: draft.sync,
-        evaluation_framework: draft.evaluation_framework,
       });
-      const { instructions_updated, ...config } = result;
+      const { instructionsUpdated, ...config } = result;
       setSaved(config);
       setDraft(structuredClone(config));
-      setSaveResult(instructions_updated ?? []);
+      setSaveResult(instructionsUpdated ?? []);
       setSaveState('saved');
       setTimeout(() => setSaveState('idle'), 3000);
     } catch {
@@ -152,16 +206,8 @@ export function SettingsPage({ onTabChange }: { onTabChange?: (tab: ActiveTab) =
   }, [saved]);
 
   // Local draft setters (no API calls)
-  const setCapture = useCallback((partial: Partial<FullConfig['capture']>) => {
-    setDraft((d) => d ? { ...d, capture: { ...d.capture, ...partial } } : d);
-  }, []);
-
   const setSync = useCallback((partial: Partial<FullConfig['sync']>) => {
     setDraft((d) => d ? { ...d, sync: { ...d.sync, ...partial } } : d);
-  }, []);
-
-  const setFramework = useCallback((v: string) => {
-    setDraft((d) => d ? { ...d, evaluation_framework: v } : d);
   }, []);
 
   if (error) {
@@ -188,163 +234,120 @@ export function SettingsPage({ onTabChange }: { onTabChange?: (tab: ActiveTab) =
           <Camera className="w-4 h-4 text-text-muted" />
           <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest">Capture</h2>
         </div>
-        <p className="text-[11px] text-text-muted mb-3">What data to record locally for each session. All data stays on your machine unless you enable Cloud Sync.</p>
+        <p className="text-[11px] text-text-muted mb-3">What data is captured for each prompt and what gets synced to the cloud.</p>
 
         <div className="space-y-3">
           {/* Local only — never synced */}
           <div>
             <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
-              <HardDrive className="w-3 h-3 text-emerald-500" />
-              <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Local only — never synced</span>
+              <HardDrive className="w-3 h-3 text-emerald" />
+              <span className="text-[10px] font-semibold text-emerald uppercase tracking-wider">Local only — never synced</span>
             </div>
-            <div className="divide-y divide-border/30 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.03] px-3">
-              <SettingToggle
-                label="Prompts"
-                description="Record prompt text and word count"
-                checked={draft.capture.prompt}
-                onChange={(v) => setCapture({ prompt: v })}
-              />
-              <SettingToggle
-                label="Prompt images"
-                description="Record image descriptions from prompts"
-                checked={draft.capture.prompt_images}
-                onChange={(v) => setCapture({ prompt_images: v })}
-              />
+            <div className="divide-y divide-border/30 rounded-lg border border-emerald/15 bg-emerald/[0.03] px-3">
+              <div className="py-2">
+                <div className="text-xs font-medium text-text-primary">Prompts</div>
+                <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">Full prompt text — always saved locally.</div>
+              </div>
+              <div className="py-2">
+                <div className="text-xs font-medium text-text-primary">Prompt images</div>
+                <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">AI-generated descriptions of attached images — always saved locally.</div>
+              </div>
             </div>
           </div>
 
-          {/* Synced when Cloud Sync is enabled */}
+          {/* Choose what to sync */}
           <div>
             <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
-              <CloudUpload className="w-3 h-3 text-blue-400" />
-              <span className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider">Synced when Cloud Sync is enabled</span>
+              <CloudUpload className="w-3 h-3 text-blue" />
+              <span className="text-[10px] font-semibold text-blue uppercase tracking-wider">Configure what gets sent on manual or auto sync</span>
             </div>
-            <div className="divide-y divide-border/30 rounded-lg border border-blue-400/15 bg-blue-400/[0.03] px-3">
-              <SettingToggle
-                label="Evaluation scores"
-                description="Record session quality scores — included in stats sync"
-                checked={draft.capture.evaluation}
-                onChange={(v) => setCapture({ evaluation: v })}
-              />
-              <SettingToggle
-                label="Milestones"
-                description="Record accomplishments — included in titles & milestones sync"
-                checked={draft.capture.milestones}
-                onChange={(v) => setCapture({ milestones: v })}
-              />
+            {!draft.authenticated && (
+              <p className="text-[11px] text-text-muted mb-1">Sign in first to configure sync settings.</p>
+            )}
+            {draft.authenticated && <div className="divide-y divide-border/30 rounded-lg border border-blue/15 bg-blue/[0.03] px-3">
+              <div className="py-2">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-medium text-text-primary">Leaderboard Stats</span>
+                  <InfoTooltip fields={['promptId', 'connectionId', 'client', 'taskType', 'title', 'model', 'startedAt', 'endedAt', 'durationMs', 'languages', 'filesTouchedCount', 'activeSegments', 'promptImageCount', 'prevHash', 'hash', 'signature', '— Evaluation scores —', 'promptQuality', 'contextProvided', 'scopeQuality', 'independenceLevel', 'taskOutcome', 'iterationCount', 'toolsLeveraged', '— Daily totals —', 'clockTimeSeconds', 'aiTimeSeconds', 'multiplier', 'promptCount', 'streakDays', 'taskTypes', 'clients']} example="aiTimeSeconds: 7200, promptQuality: 4, taskOutcome: completed" />
+                </div>
+                <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">Session data, evaluation scores, and daily totals — always included with sync.</div>
+              </div>
               <SettingSelect
                 label="Evaluation reasons"
-                description="When to include reason text for each score — included in titles & milestones sync"
-                value={draft.capture.evaluation_reasons}
+                description="Text explaining why each score was given."
+                value={draft.sync.evaluationReasons}
+                info={['promptQualityReason', 'contextProvidedReason', 'scopeQualityReason', 'independenceLevelReason', 'taskOutcomeReason', '*Ideal — what would make each score 5/5']}
+                example='"Clear question but missing file context"'
                 options={[
-                  { value: 'all', label: 'All scores' },
-                  { value: 'below_perfect', label: 'Below perfect only' },
+                  { value: 'all', label: 'All reasons' },
+                  { value: 'belowPerfect', label: 'Below 5/5 only' },
                   { value: 'none', label: 'None' },
                 ]}
-                onChange={(v) => setCapture({ evaluation_reasons: v as FullConfig['capture']['evaluation_reasons'] })}
+                onChange={(v) => setSync({ evaluationReasons: v as FullConfig['sync']['evaluationReasons'] })}
               />
-            </div>
+              <div className="py-2">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-medium text-text-primary">Milestones</span>
+                  <InfoTooltip fields={['title', 'privateTitle', 'category', 'complexity']} example='title: "Built login page", category: "feature"' />
+                </div>
+                <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">Always synced — only visible to you as the owner, never shown publicly.</div>
+              </div>
+              <div className="py-2">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-medium text-text-primary">Private details</span>
+                  <InfoTooltip fields={['privateTitle', 'project']} example='privateTitle: "Fixed auth bug in login.ts"' />
+                </div>
+                <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">Always synced — only visible to you as the owner, never shown publicly.</div>
+              </div>
+            </div>}
           </div>
         </div>
-      </section>
-
-      {/* Evaluation */}
-      <section className="bg-bg-surface-1 border border-border/50 rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <BarChart3 className="w-4 h-4 text-text-muted" />
-          <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest">Evaluation</h2>
-        </div>
-        <p className="text-[11px] text-text-muted mb-3">How sessions are scored.</p>
-
-        <SettingSelect
-          label="Framework"
-          description="Scoring method used for session evaluations"
-          value={draft.evaluation_framework}
-          options={[
-            { value: 'space', label: 'SPACE (weighted)' },
-            { value: 'raw', label: 'Raw (equal weight)' },
-          ]}
-          onChange={setFramework}
-        />
       </section>
 
       {/* Cloud Sync */}
       <section className="bg-bg-surface-1 border border-border/50 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-3">
           <Cloud className="w-4 h-4 text-text-muted" />
-          <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest">Cloud Sync</h2>
+          <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest">Auto Sync Settings</h2>
         </div>
         <p className="text-[11px] text-text-muted mb-3">
-          Sync session data to useai.dev for leaderboards and public profiles.
-          {!draft.authenticated && ' Login first to enable sync.'}
+          Configure automatic data sync to useai.dev.
+          {!draft.authenticated && ' Sign in first to enable sync.'}
         </p>
 
+        {draft.authenticated && (
         <div className="divide-y divide-border/30">
           <SettingToggle
             label="Auto-sync"
-            description="Automatically sync data on a schedule"
-            checked={draft.sync.enabled}
-            onChange={(v) => setSync({ enabled: v })}
+            description="Automatically sync data on a schedule."
+            checked={draft.sync.autoSync}
+            onChange={(v) => setSync({ autoSync: v })}
           />
 
-          {draft.sync.enabled && (
+          {draft.sync.autoSync && (
             <div className="space-y-3 pt-2">
-              {/* Public — visible on profile */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
-                  <Globe className="w-3 h-3 text-amber-400" />
-                  <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Public — visible on your profile</span>
+              {orgs.length > 0 && (
+                <div className="px-0.5">
+                  <div className="text-[10px] text-text-muted mb-1">Your organizations:</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {orgs.map((o) => (
+                      <span
+                        key={o.org.id}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald/10 text-[10px] font-medium text-emerald"
+                      >
+                        {o.org.name}
+                        <span className="text-emerald/50">{o.role}</span>
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="divide-y divide-border/30 rounded-lg border border-amber-400/15 bg-amber-400/[0.03] px-3">
-                  <SettingToggle
-                    label="Sync my stats"
-                    description="Hours, languages, task types, streaks, evaluation scores — always included with sync"
-                    checked={true}
-                    onChange={() => {}}
-                    disabled
-                  />
-                </div>
-              </div>
-
-              {/* Private — visible to you & org */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
-                  <Lock className="w-3 h-3 text-emerald-500" />
-                  <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">
-                    Private — visible to you{orgs.length > 0 ? ' & your organization' : ''}
-                  </span>
-                </div>
-                <div className="divide-y divide-border/30 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.03] px-3">
-                  <SettingToggle
-                    label="Sync titles & milestones"
-                    description={`Session titles, project names, evaluation reasons, and milestones${orgs.length > 0 ? ' — also visible to org admins' : ''}`}
-                    checked={draft.sync.include_details}
-                    onChange={(v) => setSync({ include_details: v })}
-                  />
-                  {orgs.length > 0 && (
-                    <div className="py-2">
-                      <div className="text-[10px] text-text-muted mb-1">Your organizations:</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {orgs.map((o) => (
-                          <span
-                            key={o.org.id}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-[10px] font-medium text-emerald-400"
-                          >
-                            {o.org.name}
-                            <span className="text-emerald-400/50">{o.role}</span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              )}
 
               <div className="divide-y divide-border/30">
                 <SettingSelect
                   label="Sync interval"
-                  description="How often to sync data"
-                  value={String(draft.sync.interval_hours)}
+                  description="How often to sync data."
+                  value={String(draft.sync.intervalHours)}
                   options={[
                     { value: '0.25', label: 'Every 15 minutes' },
                     { value: '0.5', label: 'Every 30 minutes' },
@@ -355,33 +358,81 @@ export function SettingsPage({ onTabChange }: { onTabChange?: (tab: ActiveTab) =
                     { value: '12', label: 'Every 12 hours' },
                     { value: '24', label: 'Every 24 hours' },
                   ]}
-                  onChange={(v) => setSync({ interval_hours: Number(v) })}
+                  onChange={(v) => setSync({ intervalHours: Number(v) })}
                 />
               </div>
             </div>
           )}
         </div>
+        )}
       </section>
 
-      {/* Sync Logs & FAQs */}
+      {/* Seal Verification */}
+      <section className="bg-bg-surface-1 border border-border/50 rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <ShieldCheck className="w-4 h-4 text-emerald" />
+          <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest">Seal Verification</h2>
+        </div>
+        <div className="space-y-2">
+          <p className="text-[11px] text-text-muted leading-relaxed">
+            When a session ends, a verification request is sent to useai.dev with the session ID and timestamp.
+            The server generates a unique signature and stores it. This proves the session was sealed in real-time
+            and not fabricated later.
+          </p>
+          <div className="divide-y divide-border/30 rounded-lg border border-emerald/15 bg-emerald/[0.03] px-3">
+            <div className="py-2 flex items-start gap-2">
+              <span className="text-[10px] font-mono text-emerald mt-0.5">→</span>
+              <div>
+                <div className="text-xs font-medium text-text-primary">What's sent</div>
+                <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">Session ID + end timestamp — no prompt content, no code, no evaluation data.</div>
+              </div>
+            </div>
+            <div className="py-2 flex items-start gap-2">
+              <span className="text-[10px] font-mono text-emerald mt-0.5">→</span>
+              <div>
+                <div className="text-xs font-medium text-text-primary">What happens</div>
+                <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">Server generates a hash and returns the signature.</div>
+              </div>
+            </div>
+            <div className="py-2 flex items-start gap-2">
+              <span className="text-[10px] font-mono text-emerald mt-0.5">→</span>
+              <div>
+                <div className="text-xs font-medium text-text-primary">Why</div>
+                <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">Only verified sessions are counted towards the leaderboard.</div>
+              </div>
+            </div>
+            <div className="py-2 flex items-start gap-2">
+              <span className="text-[10px] font-mono text-emerald mt-0.5">→</span>
+              <div>
+                <div className="text-xs font-medium text-text-primary">If offline</div>
+                <div className="text-[11px] text-text-muted leading-relaxed mt-0.5">Session seals normally without verification. It won't count towards the leaderboard.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* More */}
       <section className="bg-bg-surface-1 border border-border/50 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-3">
           <ScrollText className="w-4 h-4 text-text-muted" />
           <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest">More</h2>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => onTabChange?.('logs')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-bg-surface-2 border border-border/50 text-text-primary hover:bg-bg-surface-3 transition-colors"
-          >
-            <ScrollText className="w-3 h-3" />
-            View sync logs
-          </button>
+          {draft.authenticated && (
+            <button
+              onClick={() => onTabChange?.('logs')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-bg-surface-2 border border-border/50 text-text-primary hover:bg-bg-surface-3 transition-colors"
+            >
+              <ScrollText className="w-3 h-3" />
+              View sync logs
+            </button>
+          )}
           <button
             onClick={() => onTabChange?.('faqs')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-bg-surface-2 border border-border/50 text-text-primary hover:bg-bg-surface-3 transition-colors"
           >
-            <HelpCircle className="w-3 h-3" />
+            <Info className="w-3 h-3" />
             FAQs
           </button>
         </div>

@@ -1,97 +1,52 @@
-import { Command } from 'commander';
-import { existsSync, statSync, readdirSync } from 'node:fs';
-import pc from 'picocolors';
-import { readJson } from '@useai/shared/utils';
-import {
-  USEAI_DIR,
-  SESSIONS_FILE,
-  MILESTONES_FILE,
-  DATA_DIR,
-} from '@useai/shared/constants';
-import { formatDuration } from '@useai/shared/utils';
-import type { SessionSeal, Milestone } from '@useai/shared/types';
-import { getUserMode } from '@useai/shared/types';
-import { getConfig } from '../services/config.service.js';
-import { header, table, info } from '../utils/display.js';
+import type { Command } from "commander";
+import { getDaemonStatus } from "../services/daemon.service.js";
+import { getConfig } from "@devness/useai-storage";
+import { header, label, formatDuration, success, fail } from "../utils/display.js";
+import pc from "picocolors";
 
-function dirSize(dirPath: string): number {
-  if (!existsSync(dirPath)) return 0;
-  let total = 0;
-  try {
-    const entries = readdirSync(dirPath, { withFileTypes: true, recursive: true });
-    for (const entry of entries) {
-      if (entry.isFile()) {
-        const parentPath = entry.parentPath ?? (entry as unknown as { path: string }).path ?? dirPath;
-        try {
-          total += statSync(`${parentPath}/${entry.name}`).size;
-        } catch {
-          // skip files we can't stat
-        }
+export function registerStatus(program: Command): void {
+  program
+    .command("status")
+    .description("Show daemon and config status")
+    .action(async () => {
+      header("Status");
+
+      const [daemonStatus, config] = await Promise.all([
+        getDaemonStatus(),
+        getConfig().catch(() => null),
+      ]);
+
+      // Daemon
+      if (daemonStatus.running) {
+        success(`Daemon running at ${daemonStatus.url}`);
+        if (daemonStatus.uptimeSeconds !== undefined)
+          label("  uptime",    formatDuration(daemonStatus.uptimeSeconds * 1000));
+        if (daemonStatus.activeSessions !== undefined)
+          label("  connections", String(daemonStatus.activeSessions));
+        if (daemonStatus.version)
+          label("  version",  daemonStatus.version);
+      } else {
+        fail(`Daemon not running  (${daemonStatus.url})`);
       }
-    }
-  } catch {
-    // directory not readable
-  }
-  return total;
+
+      // Config
+      console.log();
+      if (config) {
+        label("Eval framework",  config.evaluation.framework);
+
+        const user = config.auth.user;
+        if (user) {
+          label("Auth", pc.green(`${user.username ?? user.email} (${user.id.slice(0, 8)}…)`));
+          label("Auto-sync", String(config.sync.autoSync));
+          if (config.lastSyncAt)
+            label("Last sync", config.lastSyncAt.slice(0, 19).replace("T", " "));
+        } else {
+          label("Auth", pc.dim("not logged in"));
+        }
+      } else {
+        label("Config", pc.dim("not found"));
+      }
+
+      console.log();
+    });
 }
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-export const statusCommand = new Command('status')
-  .description('Full transparency dashboard — see everything stored locally')
-  .action(() => {
-    const sessions = readJson<SessionSeal[]>(SESSIONS_FILE, []);
-    const milestones = readJson<Milestone[]>(MILESTONES_FILE, []);
-    const config = getConfig();
-
-    const totalSeconds = sessions.reduce((sum, s) => sum + s.duration_seconds, 0);
-    const unpublished = milestones.filter((m) => !m.published).length;
-    const published = milestones.filter((m) => m.published).length;
-
-    const storageSize = dirSize(USEAI_DIR);
-
-    console.log(header('useai Status'));
-
-    console.log(
-      table([
-        ['Sessions recorded', pc.bold(String(sessions.length))],
-        ['Total tracked time', pc.bold(formatDuration(totalSeconds))],
-        ['Milestones', pc.bold(`${unpublished} unpublished, ${published} published`)],
-        ['Local storage', pc.bold(formatBytes(storageSize))],
-        ['Data directory', pc.dim(DATA_DIR)],
-      ]),
-    );
-
-    console.log(header('Settings'));
-
-    const mode = getUserMode(config);
-    const modeDisplay = mode === 'cloud'
-      ? pc.green('Cloud') + pc.dim(` · @${config.auth!.user.username ?? config.auth!.user.email}`)
-      : pc.cyan('Local');
-
-    console.log(
-      table([
-        ['Mode', modeDisplay],
-        ['Milestone tracking', config.capture.milestones ? pc.green('on') : pc.red('off')],
-        ['Prompt capture', config.capture.prompt ? pc.green('on') : pc.red('off')],
-        ['Eval reasons', config.capture.evaluation_reasons],
-        ['Cloud sync', config.sync.enabled ? pc.green('on') : pc.red('off')],
-        ['Sync interval', `${config.sync.interval_hours}h`],
-        ['Last sync', config.last_sync_at ?? pc.dim('never')],
-      ]),
-    );
-
-    console.log(header('Privacy'));
-    console.log(
-      info('Prompts are stored locally only. Cloud sync strips private data by default.'),
-    );
-    console.log(
-      info('Configure sync.include to control what leaves your machine.'),
-    );
-
-    console.log('');
-  });

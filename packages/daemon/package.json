@@ -1,0 +1,35 @@
+{
+  "name": "@devness/useai-daemon",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "useai-daemon": "./dist/app.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./autostart": "./dist/autostart.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "start": "node --env-file-if-exists=.env --watch dist/app.js",
+    "start:prod": "node --env-file-if-exists=.env.production dist/app.js",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@devness/useai-types": "workspace:*",
+    "@devness/useai-storage": "workspace:*",
+    "@devness/useai": "workspace:*",
+    "@devness/useai-cloud": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "hono": "^4.0.0",
+    "@hono/node-server": "^1.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "vitest": "^3.0.0"
+  }
+}

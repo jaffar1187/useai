@@ -13,12 +13,12 @@ const faqs: FaqItem[] = [
         <p>Every session and milestone records two titles to give you control over what you share.</p>
         <div className="space-y-1.5">
           <div className="flex items-start gap-2">
-            <Globe className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
-            <p><span className="text-amber-400 font-medium">Public title</span> — A generic summary with no project names or file paths. Visible to your organization or group members.</p>
+            <Globe className="w-3 h-3 text-amber mt-0.5 shrink-0" />
+            <p><span className="text-amber font-medium">Public title</span> — A generic summary with no project names or file paths. Visible to your organization or group members.</p>
           </div>
           <div className="flex items-start gap-2">
-            <Lock className="w-3 h-3 text-emerald-400 mt-0.5 shrink-0" />
-            <p><span className="text-emerald-400 font-medium">Private title</span> — A detailed description with project specifics. Only visible to you and authorized organization roles.</p>
+            <Lock className="w-3 h-3 text-emerald mt-0.5 shrink-0" />
+            <p><span className="text-emerald font-medium">Private title</span> — A detailed description with project specifics. Only visible to you and authorized organization roles.</p>
           </div>
         </div>
         <p>Both titles are controlled by the "Sync titles & milestones" toggle in Settings &gt; Cloud Sync. Neither is synced unless you explicitly enable it.</p>
