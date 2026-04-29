@@ -67,14 +67,14 @@ const SKELETON_TITLE_WIDTHS = ['85%', '62%', '78%', '54%', '70%', '88%'];
 function SessionCardSkeleton({ widthIndex = 0 }: { widthIndex?: number }) {
   return (
     <div className="mb-2 rounded-xl border border-border/50 bg-bg-surface-1/35">
-      <div className="flex items-center px-3.5 py-2.5 gap-3">
+      <div className="flex items-center px-3.5 py-2.5 gap-3 min-h-[41.5px]">
         <div className="w-8 h-8 rounded-lg bg-bg-surface-3 animate-pulse flex-shrink-0" />
-        <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex-1 min-w-0 space-y-1">
           <div
-            className="h-3.5 rounded bg-bg-surface-3 animate-pulse"
+            className="h-5 rounded bg-bg-surface-3 animate-pulse"
             style={{ width: SKELETON_TITLE_WIDTHS[widthIndex % SKELETON_TITLE_WIDTHS.length] }}
           />
-          <div className="h-2.5 w-1/3 rounded bg-bg-surface-3/70 animate-pulse" />
+          <div className="h-[18px] w-1/3 rounded bg-bg-surface-3/70 animate-pulse" />
         </div>
       </div>
     </div>
