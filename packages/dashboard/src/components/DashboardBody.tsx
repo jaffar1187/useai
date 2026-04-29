@@ -305,7 +305,7 @@ export function DashboardBody({
                 onClick={() => setTimeMode("user")}
                 className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${
                   timeMode === "user"
-                    ? "bg-white/15 text-white shadow-sm"
+                    ? "bg-text-primary/10 text-text-primary shadow-sm"
                     : "text-text-muted hover:text-text-primary hover:bg-bg-surface-2"
                 }`}
               >
@@ -315,7 +315,7 @@ export function DashboardBody({
                 onClick={() => setTimeMode("ai")}
                 className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${
                   timeMode === "ai"
-                    ? "bg-white/15 text-white shadow-sm"
+                    ? "bg-text-primary/10 text-text-primary shadow-sm"
                     : "text-text-muted hover:text-text-primary hover:bg-bg-surface-2"
                 }`}
               >
