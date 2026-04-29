@@ -106,5 +106,56 @@ console.log("\n  Pushing to origin…");
 run("git push origin main --follow-tags");
 
 console.log(`\n  ✓ Tagged v${nextVersion} and pushed.`);
-console.log(`    CI will build, test, and publish to npm with provenance.`);
-console.log(`    Watch: gh run watch --workflow=publish.yml\n`);
+console.log(`    CI is publishing to npm with provenance now.\n`);
+
+// ── Auto-watch the publish workflow ──────────────────────────────────────────
+// `gh run watch` requires a run ID, not a workflow filter, so resolve the
+// latest run for publish.yml and hand it over. Falls back to printing a
+// copy-pasteable command if `gh` isn't installed or the run isn't visible yet.
+
+function hasGh() {
+  try {
+    execSync("which gh", { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const watchHint = `gh run watch $(gh run list --workflow=publish.yml --limit 1 --json databaseId --jq '.[0].databaseId')`;
+
+if (!hasGh()) {
+  console.log(`  Install the GitHub CLI (gh) to watch the run live, or check:`);
+  console.log(`    https://github.com/devness-com/useai/actions\n`);
+  process.exit(0);
+}
+
+// Wait briefly for GitHub to register the new run after the tag push.
+console.log("  Waiting for the workflow run to register…");
+let runId = "";
+const deadline = Date.now() + 30_000;
+while (Date.now() < deadline) {
+  try {
+    const out = execSync(
+      `gh run list --workflow=publish.yml --limit 1 --json databaseId,headBranch --jq '.[0] | select(.headBranch == "v${nextVersion}") | .databaseId'`,
+      { cwd: ROOT, encoding: "utf-8" },
+    ).trim();
+    if (out) { runId = out; break; }
+  } catch { /* retry */ }
+  execSync("sleep 2");
+}
+
+if (!runId) {
+  console.log(`\n  Couldn't find the run for v${nextVersion} yet. Try:`);
+  console.log(`    ${watchHint}\n`);
+  process.exit(0);
+}
+
+console.log(`\n  Watching run ${runId} (Ctrl+C to detach — workflow keeps running):\n`);
+try {
+  run(`gh run watch ${runId} --exit-status`);
+} catch {
+  console.error(`\n  ✗ Workflow failed. Inspect logs:`);
+  console.error(`    gh run view ${runId} --log-failed\n`);
+  process.exit(1);
+}
