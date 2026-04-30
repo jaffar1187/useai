@@ -9,6 +9,10 @@ import {
 } from "@devness/useai-tool-installer";
 import { DAEMON_URL } from "@devness/useai-storage/paths";
 import { getDaemonStatus, startDaemonProcess } from "../services/daemon.service.js";
+import {
+  installAutostart,
+  getAutostartPlatform,
+} from "../../daemon/core/autostart.js";
 
 export async function runSetup(opts: { yes?: boolean } = {}): Promise<void> {
   console.log();
@@ -59,20 +63,38 @@ export async function runSetup(opts: { yes?: boolean } = {}): Promise<void> {
   }
 
   // Auto-start the daemon so the AI tools we just configured can connect immediately.
+  // On macOS/Linux we install the autostart service (launchd / systemd --user)
+  // — that registers the daemon so it survives reboots AND starts it right now.
+  // On unsupported platforms (e.g. Windows for now) we fall back to a detached
+  // spawn that lasts only for the current login.
   if (installedCount > 0) {
     const status = await getDaemonStatus();
     if (status.running) {
       p.log.info(`Daemon already running at ${DAEMON_URL}`);
     } else {
+      const platform = getAutostartPlatform();
+      let startedViaAutostart = false;
+      if (platform) {
+        try {
+          installAutostart();
+          startedViaAutostart = true;
+          p.log.success(`Autostart enabled — daemon will start at every login.`);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          p.log.warn(`Could not enable autostart: ${msg}. Falling back to a one-shot start.`);
+        }
+      } else {
+        p.log.info(`Autostart is not yet supported on ${process.platform}. Starting a one-shot daemon.`);
+      }
+
       try {
-        startDaemonProcess();
-        // Wait briefly so the daemon has time to bind its port before we declare success.
+        if (!startedViaAutostart) startDaemonProcess();
         await new Promise((r) => setTimeout(r, 1500));
         const after = await getDaemonStatus();
         if (after.running) {
           p.log.success(`Daemon started at ${DAEMON_URL}`);
         } else {
-          p.log.warn(`Daemon spawned but didn't respond yet — run \`useai daemon status\` to check.`);
+          p.log.warn(`Daemon didn't respond yet — run \`useai daemon status\` to check.`);
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);

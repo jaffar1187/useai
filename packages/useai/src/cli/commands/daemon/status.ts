@@ -1,6 +1,10 @@
 import type { Command } from "commander";
 import { getDaemonStatus } from "../../services/daemon.service.js";
 import { label, formatDuration, success, fail } from "../../utils/display.js";
+import {
+  isAutostartEnabled,
+  getAutostartPlatform,
+} from "../../../daemon/core/autostart.js";
 
 export function registerDaemonStatus(daemon: Command): void {
   daemon
@@ -17,6 +21,11 @@ export function registerDaemonStatus(daemon: Command): void {
         if (status.version)          label("  Version",    status.version);
       } else {
         fail(`Not running  (${status.url})`);
+      }
+
+      const platform = getAutostartPlatform();
+      if (platform) {
+        label("  Autostart", isAutostartEnabled() ? `enabled (${platform})` : "not installed");
       }
       console.log();
     });

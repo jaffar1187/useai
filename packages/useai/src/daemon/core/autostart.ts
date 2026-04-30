@@ -2,6 +2,8 @@ import { existsSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { execSync } from "node:child_process";
+import { DAEMON_PORT, DAEMON_LOG_FILE } from "@devness/useai-storage/paths";
+import { resolveNpxPath, buildServicePath } from "./resolve-npx.js";
 
 const HOME = homedir();
 
@@ -12,7 +14,20 @@ const HOME = homedir();
 const LAUNCHD_LABEL = "dev.useai.daemon";
 const LAUNCHD_PLIST_PATH = join(HOME, "Library", "LaunchAgents", `${LAUNCHD_LABEL}.plist`);
 
-function launchdPlist(nodePath: string, daemonBin: string): string {
+function launchdDomain(): string {
+  try {
+    const uid = execSync("id -u", { encoding: "utf-8" }).trim();
+    return `gui/${uid}`;
+  } catch {
+    return `gui/${process.getuid?.() ?? 501}`;
+  }
+}
+
+function launchdServiceTarget(): string {
+  return `${launchdDomain()}/${LAUNCHD_LABEL}`;
+}
+
+function launchdPlist(npxPath: string, servicePath: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -21,25 +36,63 @@ function launchdPlist(nodePath: string, daemonBin: string): string {
   <string>${LAUNCHD_LABEL}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${nodePath}</string>
-    <string>${daemonBin}</string>
+    <string>${npxPath}</string>
+    <string>-y</string>
+    <string>--prefer-online</string>
+    <string>@devness/useai@latest</string>
+    <string>daemon-run</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
-  <false/>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>ExitTimeOut</key>
+  <integer>10</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
   <key>StandardOutPath</key>
-  <string>${join(HOME, ".useai", "daemon.log")}</string>
+  <string>${DAEMON_LOG_FILE}</string>
   <key>StandardErrorPath</key>
-  <string>${join(HOME, ".useai", "daemon.log")}</string>
+  <string>${DAEMON_LOG_FILE}</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    <string>${servicePath}</string>
+    <key>USEAI_PORT</key>
+    <string>${DAEMON_PORT}</string>
   </dict>
 </dict>
 </plist>
 `;
+}
+
+function installMacos(): void {
+  const npxPath = resolveNpxPath();
+  const servicePath = buildServicePath();
+  const target = launchdServiceTarget();
+  const domain = launchdDomain();
+
+  mkdirSync(dirname(LAUNCHD_PLIST_PATH), { recursive: true });
+  writeFileSync(LAUNCHD_PLIST_PATH, launchdPlist(npxPath, servicePath), "utf-8");
+
+  // Bootout first so a re-install picks up plist changes (idempotent).
+  try { execSync(`launchctl bootout ${target} 2>/dev/null`, { stdio: "ignore" }); } catch { /* ignore */ }
+
+  // Clear any disabled state from a prior crash-loop throttle.
+  try { execSync(`launchctl enable ${target}`, { stdio: "ignore" }); } catch { /* ignore */ }
+
+  execSync(`launchctl bootstrap ${domain} "${LAUNCHD_PLIST_PATH}"`, { stdio: "ignore" });
+}
+
+function uninstallMacos(): void {
+  const target = launchdServiceTarget();
+  try { execSync(`launchctl bootout ${target} 2>/dev/null`, { stdio: "ignore" }); } catch { /* ignore */ }
+  try { if (existsSync(LAUNCHD_PLIST_PATH)) unlinkSync(LAUNCHD_PLIST_PATH); } catch { /* ignore */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -49,42 +102,44 @@ function launchdPlist(nodePath: string, daemonBin: string): string {
 const SYSTEMD_UNIT_NAME = "useai-daemon.service";
 const SYSTEMD_UNIT_PATH = join(HOME, ".config", "systemd", "user", SYSTEMD_UNIT_NAME);
 
-function systemdUnit(nodePath: string, daemonBin: string): string {
+function systemdUnit(npxPath: string, servicePath: string): string {
   return `[Unit]
 Description=useai daemon
 After=network.target
+StartLimitBurst=5
+StartLimitIntervalSec=60
 
 [Service]
 Type=simple
-ExecStart=${nodePath} ${daemonBin}
+ExecStart=${npxPath} -y --prefer-online @devness/useai@latest daemon-run
 Restart=on-failure
-StandardOutput=append:${join(HOME, ".useai", "daemon.log")}
-StandardError=append:${join(HOME, ".useai", "daemon.log")}
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+RestartSec=10
+StandardOutput=append:${DAEMON_LOG_FILE}
+StandardError=append:${DAEMON_LOG_FILE}
+Environment=PATH=${servicePath}
+Environment=USEAI_PORT=${DAEMON_PORT}
 
 [Install]
 WantedBy=default.target
 `;
 }
 
-// ---------------------------------------------------------------------------
-// Resolve paths
-// ---------------------------------------------------------------------------
+function installLinux(): void {
+  const npxPath = resolveNpxPath();
+  const servicePath = buildServicePath();
 
-function resolveNodePath(): string {
-  return process.execPath;
+  mkdirSync(dirname(SYSTEMD_UNIT_PATH), { recursive: true });
+  writeFileSync(SYSTEMD_UNIT_PATH, systemdUnit(npxPath, servicePath), "utf-8");
+
+  try { execSync(`systemctl --user reset-failed ${SYSTEMD_UNIT_NAME}`, { stdio: "ignore" }); } catch { /* ignore */ }
+  execSync("systemctl --user daemon-reload", { stdio: "ignore" });
+  execSync(`systemctl --user enable --now ${SYSTEMD_UNIT_NAME}`, { stdio: "ignore" });
 }
 
-function resolveDaemonBin(): string {
-  // Resolve the bin relative to this module's location at runtime
-  try {
-    const url = new URL(import.meta.url);
-    const thisFile = url.pathname;
-    // dist/autostart.js → dist/app.js
-    return join(dirname(thisFile), "app.js");
-  } catch {
-    return "useai-daemon";
-  }
+function uninstallLinux(): void {
+  try { execSync(`systemctl --user disable --now ${SYSTEMD_UNIT_NAME}`, { stdio: "ignore" }); } catch { /* ignore */ }
+  try { if (existsSync(SYSTEMD_UNIT_PATH)) unlinkSync(SYSTEMD_UNIT_PATH); } catch { /* ignore */ }
+  try { execSync("systemctl --user daemon-reload", { stdio: "ignore" }); } catch { /* ignore */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -99,49 +154,38 @@ export function getAutostartPlatform(): AutostartPlatform | null {
   return null;
 }
 
+/**
+ * Install (and start) the autostart service for the current platform.
+ *
+ * On macOS this writes a launchd plist to `~/Library/LaunchAgents/` and
+ * bootstraps it so the daemon starts immediately and on every login.
+ * On Linux this writes a systemd user unit to `~/.config/systemd/user/`
+ * and runs `enable --now` to start and persist it.
+ *
+ * Idempotent: re-running re-applies the latest plist/unit content.
+ */
 export function installAutostart(): void {
   const platform = getAutostartPlatform();
   if (!platform) throw new Error(`Autostart not supported on ${process.platform}`);
 
-  const nodePath = resolveNodePath();
-  const daemonBin = resolveDaemonBin();
-
   if (platform === "darwin") {
-    mkdirSync(dirname(LAUNCHD_PLIST_PATH), { recursive: true });
-    writeFileSync(LAUNCHD_PLIST_PATH, launchdPlist(nodePath, daemonBin), "utf-8");
-    try {
-      execSync(`launchctl load -w "${LAUNCHD_PLIST_PATH}"`, { stdio: "ignore" });
-    } catch { /* plist written, load failed — daemon will start on next login */ }
+    installMacos();
     return;
   }
 
   if (platform === "linux") {
-    mkdirSync(dirname(SYSTEMD_UNIT_PATH), { recursive: true });
-    writeFileSync(SYSTEMD_UNIT_PATH, systemdUnit(nodePath, daemonBin), "utf-8");
-    try {
-      execSync("systemctl --user daemon-reload", { stdio: "ignore" });
-      execSync(`systemctl --user enable ${SYSTEMD_UNIT_NAME}`, { stdio: "ignore" });
-    } catch { /* unit file written, enable failed */ }
+    installLinux();
   }
 }
 
 export function uninstallAutostart(): void {
   const platform = getAutostartPlatform();
-
-  if (platform === "darwin" && existsSync(LAUNCHD_PLIST_PATH)) {
-    try {
-      execSync(`launchctl unload -w "${LAUNCHD_PLIST_PATH}"`, { stdio: "ignore" });
-    } catch { /* ignore */ }
-    unlinkSync(LAUNCHD_PLIST_PATH);
+  if (platform === "darwin") {
+    uninstallMacos();
     return;
   }
-
-  if (platform === "linux" && existsSync(SYSTEMD_UNIT_PATH)) {
-    try {
-      execSync(`systemctl --user disable ${SYSTEMD_UNIT_NAME}`, { stdio: "ignore" });
-      execSync("systemctl --user daemon-reload", { stdio: "ignore" });
-    } catch { /* ignore */ }
-    unlinkSync(SYSTEMD_UNIT_PATH);
+  if (platform === "linux") {
+    uninstallLinux();
   }
 }
 

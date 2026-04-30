@@ -8,6 +8,10 @@ import {
   removeClaudeCodeHooks,
   isClaudeCodeHooksInstalled,
 } from "@devness/useai-tool-installer";
+import {
+  uninstallAutostart,
+  isAutostartEnabled,
+} from "../../daemon/core/autostart.js";
 
 export function registerUninstall(program: Command): void {
   program
@@ -47,6 +51,16 @@ export function registerUninstall(program: Command): void {
       if (isClaudeCodeHooksInstalled()) {
         removeClaudeCodeHooks();
         p.log.success("Claude Code hooks removed");
+      }
+
+      if (isAutostartEnabled()) {
+        try {
+          uninstallAutostart();
+          p.log.success("Autostart service removed");
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          p.log.warn(`Could not remove autostart service: ${msg}`);
+        }
       }
 
       p.outro("Done.");

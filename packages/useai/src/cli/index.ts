@@ -19,11 +19,12 @@ import { registerLogout }     from "./commands/logout.js";
 import { registerSync }       from "./commands/sync.js";
 import { registerUpdate }     from "./commands/update.js";
 
-import { registerDaemonStart }   from "./commands/daemon/start.js";
-import { registerDaemonStop }    from "./commands/daemon/stop.js";
-import { registerDaemonRestart } from "./commands/daemon/restart.js";
-import { registerDaemonStatus }  from "./commands/daemon/status.js";
-import { registerDaemonLogs }    from "./commands/daemon/logs.js";
+import { registerDaemonStart }     from "./commands/daemon/start.js";
+import { registerDaemonStop }      from "./commands/daemon/stop.js";
+import { registerDaemonRestart }   from "./commands/daemon/restart.js";
+import { registerDaemonStatus }    from "./commands/daemon/status.js";
+import { registerDaemonLogs }      from "./commands/daemon/logs.js";
+import { registerDaemonAutostart } from "./commands/daemon/autostart.js";
 
 const program = new Command();
 
@@ -61,6 +62,7 @@ registerDaemonStop(daemon);
 registerDaemonRestart(daemon);
 registerDaemonStatus(daemon);
 registerDaemonLogs(daemon);
+registerDaemonAutostart(daemon);
 
 // Hidden: useai daemon-run starts the HTTP server in-process. Used internally
 // by `useai daemon start` to spawn a detached background daemon — not for
