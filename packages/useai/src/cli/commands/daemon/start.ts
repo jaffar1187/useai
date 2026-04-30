@@ -1,6 +1,10 @@
 import type { Command } from "commander";
-import { getDaemonStatus, startDaemonProcess } from "../../services/daemon.service.js";
-import { success, fail, info } from "../../utils/display.js";
+import {
+  getDaemonStatus,
+  startDaemonProcess,
+  waitForDaemonReady,
+} from "../../services/daemon.service.js";
+import { success, fail, info, spinner } from "../../utils/display.js";
 
 export function registerDaemonStart(daemon: Command): void {
   daemon
@@ -14,8 +18,9 @@ export function registerDaemonStart(daemon: Command): void {
       }
       try {
         startDaemonProcess();
-        await new Promise((r) => setTimeout(r, 1200));
-        const after = await getDaemonStatus();
+        const stop = spinner("Waiting for daemon to come online…");
+        const after = await waitForDaemonReady(10_000);
+        stop();
         if (after.running) {
           success(`Daemon started at ${after.url}`);
         } else {

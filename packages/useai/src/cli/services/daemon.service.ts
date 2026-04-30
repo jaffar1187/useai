@@ -85,3 +85,27 @@ export function stopDaemonProcess(): boolean {
 export function getDaemonLogPath(): string {
   return DAEMON_LOG_FILE;
 }
+
+/**
+ * Poll the daemon /health endpoint until it responds or the timeout elapses.
+ *
+ * The default timeout is generous because launchd-spawned daemons have to
+ * pay an npx cold-start cost (download + cache hydration) the first time the
+ * autostart service runs. Manually-spawned daemons usually respond inside a
+ * second; the loop exits as soon as the first /health succeeds either way.
+ *
+ * @param timeoutMs how long to wait before giving up (default 60 s)
+ * @param intervalMs poll interval (default 400 ms)
+ */
+export async function waitForDaemonReady(
+  timeoutMs = 60_000,
+  intervalMs = 400,
+): Promise<DaemonStatus> {
+  const deadline = Date.now() + timeoutMs;
+  let last = await getDaemonStatus();
+  while (!last.running && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    last = await getDaemonStatus();
+  }
+  return last;
+}
