@@ -181,10 +181,58 @@ if (publishError) {
   process.exit(1);
 }
 
-// ── 10. Done ─────────────────────────────────────────────────────────────────
+// ── 10. Verify the tarball is actually fetchable ─────────────────────────────
+//      `npm publish` exiting 0 is not a guarantee that the tarball blob
+//      landed in npm's storage. We have observed cases where metadata,
+//      attestations, and the Sigstore log were all written successfully but
+//      the tarball was missing — which silently breaks `npx @devness/useai`
+//      for everyone, including the autostart service.
+
+if (!dry) {
+  console.log(`\n  Verifying tarball is fetchable…`);
+  const tarballUrl = `https://registry.npmjs.org/@devness/useai/-/useai-${nextVersion}.tgz`;
+
+  const start = Date.now();
+  const deadlineMs = 90_000;
+  let lastStatus = 0;
+
+  while (Date.now() - start < deadlineMs) {
+    try {
+      const res = await fetch(tarballUrl, { method: "HEAD" });
+      lastStatus = res.status;
+      if (res.ok) {
+        console.log(`    ✓ Tarball available (HTTP 200) after ${Math.round((Date.now() - start) / 1000)}s`);
+        console.log(`\n  ✓ Published @devness/useai@${nextVersion}\n`);
+        process.exit(0);
+      }
+    } catch {
+      // network blip — keep polling
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+
+  console.error(
+    `\n  ✗ Publish reported success but tarball is still unreachable after ${deadlineMs / 1000}s`,
+  );
+  console.error(`    URL:         ${tarballUrl}`);
+  console.error(`    Last status: ${lastStatus || "no response"}`);
+  console.error(
+    `\n  This is a partial publish — npm wrote the metadata but the tarball blob`,
+  );
+  console.error(
+    `  did not land. Anyone running \`npx @devness/useai@latest\` (including the`,
+  );
+  console.error(
+    `  autostart service) will get HTTP 404 and fail. Do not declare this release`,
+  );
+  console.error(
+    `  successful; bump and republish, or contact npm support if the issue persists.\n`,
+  );
+  process.exit(1);
+}
+
+// ── 11. Done (dry run) ───────────────────────────────────────────────────────
 
 if (dry) {
   console.log(`\n  ✓ Dry run complete. Inspect .publish-tmp/ for the tarball.\n`);
-} else {
-  console.log(`\n  ✓ Published @devness/useai@${nextVersion}\n`);
 }
