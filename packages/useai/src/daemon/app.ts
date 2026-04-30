@@ -1,15 +1,52 @@
 import { serve } from "@hono/node-server";
+import { writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { createApp } from "./core/router.js";
 import { ensureDir } from "@devness/useai-storage";
 import {
   DATA_DIR,
   DAEMON_PORT,
   DAEMON_HOST,
+  DAEMON_PID_FILE,
 } from "@devness/useai-storage/paths";
 // import { startSyncScheduler } from "./sync-scheduler.js";
 
+function writePidFile(): void {
+  try {
+    writeFileSync(DAEMON_PID_FILE, String(process.pid), "utf-8");
+  } catch {
+    // Non-fatal: status display loses the PID row but the daemon still serves.
+  }
+}
+
+function clearPidFile(): void {
+  try {
+    if (existsSync(DAEMON_PID_FILE)) unlinkSync(DAEMON_PID_FILE);
+  } catch { /* ignore */ }
+}
+
+/**
+ * Install signal handlers so the daemon shuts down with exit code 0 on
+ * SIGTERM/SIGINT/SIGHUP. launchd's `KeepAlive {SuccessfulExit:false}` treats
+ * a non-zero exit as a crash and restarts the process — the default signal
+ * handler exits with 128+signo, which would loop forever under autostart.
+ */
+function installSignalHandlers(): void {
+  const shutdown = () => {
+    clearPidFile();
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
+  process.on("SIGHUP", shutdown);
+  process.on("exit", clearPidFile);
+}
+
 export async function startDaemon(): Promise<void> {
   await ensureDir(DATA_DIR);
+
+  writePidFile();
+  installSignalHandlers();
 
   const app = createApp();
 
