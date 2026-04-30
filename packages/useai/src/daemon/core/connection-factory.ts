@@ -5,9 +5,14 @@ import { registerTools } from "../../mcp-tools/mcp-tools.js";
 import { createPromptContext } from "../../core/prompt-context.js";
 import { connections } from "./connection-store.js";
 
+// Injected by tsup at bundle time from packages/useai/package.json.
+declare const __VERSION__: string | undefined;
+const VERSION =
+  typeof __VERSION__ !== "undefined" ? __VERSION__ : "dev";
+
 export async function createMcpConnection(): Promise<WebStandardStreamableHTTPServerTransport> {
   const promptContext = createPromptContext();
-  const server = new McpServer({ name: "useai", version: "0.1.0" });
+  const server = new McpServer({ name: "useai", version: VERSION });
 
   registerTools(server, promptContext);
 
