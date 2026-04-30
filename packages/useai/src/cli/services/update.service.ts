@@ -1,4 +1,5 @@
-import { execSync, spawn } from "node:child_process";
+import { execSync } from "node:child_process";
+import { isAutostartEnabled } from "../../daemon/core/autostart.js";
 
 const PACKAGE_NAME = "@devness/useai";
 
@@ -29,7 +30,21 @@ export function getCurrentVersion(): string {
 }
 
 export function runUpdate(): void {
-  spawn("npm", ["install", "-g", `${PACKAGE_NAME}@latest`], {
-    stdio: "inherit",
-  });
+  const wasAutostartEnabled = isAutostartEnabled();
+
+  // Synchronously install the new version. The running Node process keeps
+  // executing from memory, so it is safe to overwrite the on-disk binary.
+  execSync(`npm install -g ${PACKAGE_NAME}@latest`, { stdio: "inherit" });
+
+  // The autostart launcher pins a specific version (no @latest), so an
+  // upgrade must rewrite the launcher with the new version baked in.
+  // Spawn the freshly-installed CLI so the launcher gets the new __VERSION__.
+  if (wasAutostartEnabled) {
+    try {
+      execSync("useai daemon autostart install", { stdio: "inherit" });
+    } catch {
+      // Non-fatal — the global install succeeded; user can run
+      // `useai daemon autostart install` manually if this hook fails.
+    }
+  }
 }
