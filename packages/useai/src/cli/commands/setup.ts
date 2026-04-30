@@ -94,17 +94,18 @@ export async function runSetup(opts: { yes?: boolean } = {}): Promise<void> {
       try {
         if (!startedViaAutostart) startDaemonProcess();
 
-        // launchd boots the daemon via `npx`, which can pay a 5-30s cold-start
-        // cost on first run. Manual spawns usually respond inside a second.
-        // Poll until /health answers or we hit the timeout.
+        // launchd boots the daemon via `npx`, which can pay a cold-start cost
+        // on first run. Most starts answer in under 5 s; if it hasn't come up
+        // by 15 s we stop blocking and tell the user to check shortly — the
+        // daemon will keep starting in the background either way.
         const waitSpin = p.spinner();
         waitSpin.start("Waiting for daemon to come online…");
-        const after = await waitForDaemonReady(startedViaAutostart ? 60_000 : 10_000);
+        const after = await waitForDaemonReady(startedViaAutostart ? 15_000 : 10_000);
         if (after.running) {
           waitSpin.stop(`Daemon ready at ${DAEMON_URL}`);
         } else {
-          waitSpin.stop("Daemon didn't respond in time");
-          p.log.warn(`Run \`useai daemon status\` shortly to confirm — first npx-launchd start can be slow.`);
+          waitSpin.stop("Daemon is still starting in the background");
+          p.log.info(`Run \`useai daemon status\` in a few seconds to confirm.`);
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
