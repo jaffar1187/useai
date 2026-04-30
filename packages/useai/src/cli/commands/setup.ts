@@ -8,7 +8,11 @@ import {
   getAllToolConfigs,
 } from "@devness/useai-tool-installer";
 import { DAEMON_URL } from "@devness/useai-storage/paths";
-import { getDaemonStatus, startDaemonProcess } from "../services/daemon.service.js";
+import {
+  getDaemonStatus,
+  startDaemonProcess,
+  waitForDaemonReady,
+} from "../services/daemon.service.js";
 import {
   installAutostart,
   getAutostartPlatform,
@@ -89,12 +93,18 @@ export async function runSetup(opts: { yes?: boolean } = {}): Promise<void> {
 
       try {
         if (!startedViaAutostart) startDaemonProcess();
-        await new Promise((r) => setTimeout(r, 1500));
-        const after = await getDaemonStatus();
+
+        // launchd boots the daemon via `npx`, which can pay a 5-30s cold-start
+        // cost on first run. Manual spawns usually respond inside a second.
+        // Poll until /health answers or we hit the timeout.
+        const waitSpin = p.spinner();
+        waitSpin.start("Waiting for daemon to come online…");
+        const after = await waitForDaemonReady(startedViaAutostart ? 60_000 : 10_000);
         if (after.running) {
-          p.log.success(`Daemon started at ${DAEMON_URL}`);
+          waitSpin.stop(`Daemon ready at ${DAEMON_URL}`);
         } else {
-          p.log.warn(`Daemon didn't respond yet — run \`useai daemon status\` to check.`);
+          waitSpin.stop("Daemon didn't respond in time");
+          p.log.warn(`Run \`useai daemon status\` shortly to confirm — first npx-launchd start can be slow.`);
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
