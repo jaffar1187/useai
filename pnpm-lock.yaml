@@ -87,16 +87,6 @@ importers:
         specifier: ^6.0.0
         version: 6.4.1(@types/node@22.19.15)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/scoring:
-    dependencies:
-      '@devness/useai-types':
-        specifier: workspace:*
-        version: link:../types
-    devDependencies:
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.4(@types/node@22.19.15)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
-
   packages/storage:
     dependencies:
       '@devness/useai-crypto':
