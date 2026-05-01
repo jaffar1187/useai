@@ -47,4 +47,18 @@ export function runUpdate(): void {
       // `useai daemon autostart install` manually if this hook fails.
     }
   }
+
+  // Refresh tool MCP configs and instructions text. The MCP entry itself is
+  // stable (HTTP URL doesn't change across versions), but the bundled
+  // instructions text (the `## UseAI Session Tracking` block in CLAUDE.md,
+  // Cursor rules, etc.) is hardcoded in the source and changes between
+  // releases — without this refresh, users keep stale instructions in their
+  // AI tools indefinitely. Spawned from the freshly-installed CLI so the new
+  // instructions text gets written.
+  try {
+    execSync("useai setup --refresh -y", { stdio: "inherit" });
+  } catch {
+    // Non-fatal — global install succeeded; user can run
+    // `useai setup --refresh -y` manually if this hook fails.
+  }
 }

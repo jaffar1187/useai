@@ -18,9 +18,11 @@ import {
   getAutostartPlatform,
 } from "../../daemon/core/autostart.js";
 
-export async function runSetup(opts: { yes?: boolean } = {}): Promise<void> {
+export async function runSetup(
+  opts: { yes?: boolean; refresh?: boolean } = {},
+): Promise<void> {
   console.log();
-  p.intro(pc.bold("  useai setup"));
+  p.intro(pc.bold(opts.refresh ? "  useai setup (refresh)" : "  useai setup"));
 
   const spin = p.spinner();
   spin.start("Scanning for AI tools…");
@@ -38,10 +40,16 @@ export async function runSetup(opts: { yes?: boolean } = {}): Promise<void> {
   for (const id of configured)   p.log.success(`${getAllToolConfigs().find((c) => c.id === id)?.name ?? id}  (already configured)`);
   for (const id of unconfigured) p.log.info(`${getAllToolConfigs().find((c) => c.id === id)?.name ?? id}`);
 
-  const toInstall = unconfigured.length > 0 ? unconfigured : configured;
+  // In --refresh mode, re-install both configured AND unconfigured tools so
+  // any new instructions text or schema changes from the upgrade land on disk.
+  // Otherwise behave as before: prefer to install unconfigured ones, fall
+  // back to configured if everything is already set up.
+  const toInstall = opts.refresh
+    ? detected
+    : unconfigured.length > 0 ? unconfigured : configured;
 
   let selected: string[] = toInstall;
-  if (!opts.yes && unconfigured.length > 0) {
+  if (!opts.yes && !opts.refresh && unconfigured.length > 0) {
     const choices = toInstall.map((id) => ({
       value: id,
       label: getAllToolConfigs().find((c) => c.id === id)?.name ?? id,
@@ -122,5 +130,9 @@ export function registerSetup(program: Command): void {
     .command("setup")
     .description("Install useai in your AI tools")
     .option("-y, --yes", "Auto-confirm without prompts")
-    .action((opts: { yes?: boolean }) => runSetup(opts));
+    .option(
+      "--refresh",
+      "Re-install MCP configs and instructions in every detected tool (used by `useai update`)",
+    )
+    .action((opts: { yes?: boolean; refresh?: boolean }) => runSetup(opts));
 }
