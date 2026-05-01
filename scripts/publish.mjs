@@ -208,7 +208,7 @@ if (!dry) {
   const strict = process.env.PUBLISH_STRICT_VERIFY === "true";
 
   const start = Date.now();
-  const deadlineMs = 5 * 60 * 1000;
+  const deadlineMs = 10 * 60 * 1000;
   let lastStatus = 0;
 
   while (Date.now() - start < deadlineMs) {
