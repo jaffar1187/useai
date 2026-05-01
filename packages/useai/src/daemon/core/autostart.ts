@@ -101,6 +101,58 @@ function launchdPlist(): string {
 `;
 }
 
+/**
+ * Wait up to `timeoutMs` for the launchd service to fully tear down after a
+ * `bootout`. Re-bootstrapping while the previous instance is still in `removing`
+ * or `xpcproxy` state races with launchd and fails with the unhelpful generic
+ * "Bootstrap failed: 5: Input/output error". Polling `launchctl print` until
+ * the service is unknown lets `bootstrap` succeed first try.
+ */
+function waitForLaunchdGone(target: string, timeoutMs = 5_000): void {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      execSync(`launchctl print ${target}`, { stdio: ["ignore", "ignore", "ignore"] });
+    } catch {
+      return; // print failed → service is gone, safe to bootstrap
+    }
+    // Service still registered. Brief pause and re-check.
+    execSync("sleep 0.2");
+  }
+}
+
+/**
+ * Run `launchctl bootstrap`, capturing stderr so the user sees the actual
+ * launchd diagnostic on failure (not just "Command failed: launchctl
+ * bootstrap …"). Retries once after a short delay because the most common
+ * failure is a race against the previous instance still tearing down.
+ */
+function launchctlBootstrap(domain: string, plistPath: string): void {
+  const cmd = `launchctl bootstrap ${domain} "${plistPath}"`;
+  try {
+    execSync(cmd, { stdio: ["ignore", "ignore", "pipe"] });
+    return;
+  } catch (err: unknown) {
+    const stderr = err instanceof Error && "stderr" in err
+      ? String((err as { stderr: Buffer | string }).stderr).trim()
+      : "";
+
+    // Brief pause then retry — covers the common race where a previous
+    // instance hasn't fully unloaded yet.
+    execSync("sleep 1.5");
+    try {
+      execSync(cmd, { stdio: ["ignore", "ignore", "pipe"] });
+      return;
+    } catch (retryErr: unknown) {
+      const retryStderr = retryErr instanceof Error && "stderr" in retryErr
+        ? String((retryErr as { stderr: Buffer | string }).stderr).trim()
+        : "";
+      const detail = retryStderr || stderr || "(no error output from launchctl)";
+      throw new Error(`launchctl bootstrap failed: ${detail}`);
+    }
+  }
+}
+
 function installMacos(): void {
   const npxPath = resolveNpxPath();
   const servicePath = buildServicePath();
@@ -113,12 +165,16 @@ function installMacos(): void {
   writeFileSync(LAUNCHD_PLIST_PATH, launchdPlist(), "utf-8");
 
   // Bootout first so a re-install picks up plist changes (idempotent).
-  try { execSync(`launchctl bootout ${target} 2>/dev/null`, { stdio: "ignore" }); } catch { /* ignore */ }
+  try { execSync(`launchctl bootout ${target}`, { stdio: ["ignore", "ignore", "ignore"] }); } catch { /* ignore */ }
+
+  // Wait for the previous instance to fully tear down before bootstrapping.
+  // Otherwise `bootstrap` races with launchd's removal and fails generically.
+  waitForLaunchdGone(target);
 
   // Clear any disabled state from a prior crash-loop throttle.
-  try { execSync(`launchctl enable ${target}`, { stdio: "ignore" }); } catch { /* ignore */ }
+  try { execSync(`launchctl enable ${target}`, { stdio: ["ignore", "ignore", "ignore"] }); } catch { /* ignore */ }
 
-  execSync(`launchctl bootstrap ${domain} "${LAUNCHD_PLIST_PATH}"`, { stdio: "ignore" });
+  launchctlBootstrap(domain, LAUNCHD_PLIST_PATH);
 }
 
 function uninstallMacos(): void {
