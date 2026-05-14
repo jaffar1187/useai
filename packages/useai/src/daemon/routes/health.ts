@@ -6,8 +6,7 @@ import { getActiveSessionCount } from "../core/active-sessions.js";
 // to "dev" when running via the un-bundled tsc output so the daemon doesn't
 // crash during local development.
 declare const __VERSION__: string | undefined;
-const VERSION =
-  typeof __VERSION__ !== "undefined" ? __VERSION__ : "dev";
+const VERSION = typeof __VERSION__ !== "undefined" ? __VERSION__ : "dev";
 
 const startTime = Date.now();
 
@@ -23,7 +22,9 @@ healthRoutes.get("/health", (c) => {
   return c.json({
     status: "ok" as const,
     version: VERSION,
+    //This is wrt agents and their subagents.
     active_sessions: getActiveSessionCount(),
+    //This is wrt 1 terminal.
     mcp_connections: getConnectionCount(),
     uptime_seconds: Math.round((Date.now() - startTime) / 1000),
   });

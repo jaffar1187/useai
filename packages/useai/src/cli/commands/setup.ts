@@ -28,7 +28,12 @@ import { disableAutostart } from "./lib/autostart.js";
 // break tools that were configured during this setup. Same defense as the
 // autostart launcher.
 declare const __VERSION__: string | undefined;
-const VERSION = typeof __VERSION__ !== "undefined" ? __VERSION__ : "latest";
+// Fallback to "dev" (matching cli/index.ts and cli/commands/mcp.ts) so the
+// tool-installer's stdio entry switches to a direct `node <local cli.js>`
+// command when this CLI is run from a local tsc build (no __VERSION__
+// injected). With "latest" here, setup would always write the published
+// `npx -y @devness/useai@latest mcp` command, defeating local testing.
+const VERSION = typeof __VERSION__ !== "undefined" ? __VERSION__ : "dev";
 
 export interface SetupOptions {
   yes?: boolean;

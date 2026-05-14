@@ -39,19 +39,35 @@ async function httpEntry(toolId: string) {
  * schema is different: stdio servers use `type: "local"` with `command` as
  * a single array combining the binary and its args. Writing the canonical
  * shape causes OpenCode to reject the whole config on startup.
+ *
+ * Dev mode: when `version === "dev"` (the sentinel emitted when our CLI
+ * runs from a local source build instead of a published tarball), we
+ * write a direct `node <absolute cli.js path>` command instead of
+ * `npx -y @devness/useai@…`. That way local changes take effect on the
+ * next IDE restart without needing a publish + npx cache invalidation.
  */
 function stdioEntry(toolId: string, version: string) {
+  const isDev = version === "dev";
+  // process.argv[1] is the CLI script that's currently running setup —
+  // i.e. our own dist/cli.js. Stdio clients spawned from this config will
+  // invoke the same file directly via `node`.
+  const localCli = process.argv[1] ?? "";
+
   if (toolId === "opencode") {
     return {
       type: "local",
-      command: ["npx", "-y", `@devness/useai@${version}`, "mcp"],
+      command: isDev
+        ? ["node", localCli, "mcp"]
+        : ["npx", "-y", `@devness/useai@${version}`, "mcp"],
       enabled: true,
     } as const;
   }
   return {
     type: "stdio",
-    command: "npx",
-    args: ["-y", `@devness/useai@${version}`, "mcp"],
+    command: isDev ? "node" : "npx",
+    args: isDev
+      ? [localCli, "mcp"]
+      : ["-y", `@devness/useai@${version}`, "mcp"],
   } as const;
 }
 

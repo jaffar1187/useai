@@ -8,6 +8,7 @@ import {
   touchActiveSession,
 } from "../daemon/core/active-sessions.js";
 import { recordActivity } from "../daemon/core/connection-store.js";
+import { notifyDaemonHeartbeat } from "../daemon/core/active-sessions-client.js";
 
 export function registerHeartbeatTool(
   server: McpServer,
@@ -51,19 +52,27 @@ export function registerHeartbeatTool(
       // PromptContext is still alive in the MCP server but the dashboard
       // store has dropped it. Re-register so /health.active_sessions
       // reflects the resumed session immediately.
+      const targetRecord = {
+        promptId: target.promptId,
+        connectionId: target.connectionId,
+        client: target.client,
+        project: target.project,
+        title: target.title,
+        startedAt: target.startedAt.getTime(),
+        parentPromptId: target === ctx ? null : ctx.promptId,
+        sessionDepth: target.sessionDepth,
+      };
       if (hasActiveSession(target.promptId)) {
         touchActiveSession(target.promptId, now);
       } else {
-        registerActiveSession({
-          promptId: target.promptId,
-          connectionId: target.connectionId,
-          client: target.client,
-          project: target.project,
-          title: target.title,
-          startedAt: target.startedAt.getTime(),
-          parentPromptId: target === ctx ? null : ctx.promptId,
-          sessionDepth: target.sessionDepth,
-        });
+        registerActiveSession(targetRecord);
+      }
+      // For stdio, the local registry above only updates this process's
+      // Map. Tell the daemon too so /health reflects reality. The helper
+      // re-registers if the daemon's record is missing (covers a daemon
+      // restart between this session's start and now).
+      if (ctx.isStdio) {
+        void notifyDaemonHeartbeat(target.promptId, targetRecord);
       }
 
       const activeDurationMs = Math.max(

@@ -83,6 +83,14 @@ export interface PromptContext {
    * value (e.g. Claude-in-Windsurf reports "claude-code").
    */
   mcpClientName?: string;
+  /**
+   * True when this context belongs to the stdio MCP server (`useai mcp`).
+   * Stdio runs in a separate process from the daemon, so its local
+   * `activeSessions` Map is invisible to `/health`. Handlers read this
+   * flag to decide whether to also notify the daemon over HTTP, so stdio
+   * sessions show up in `/health.active_sessions` alongside HTTP ones.
+   */
+  isStdio?: boolean;
   prevHash: string;
   /** Mutex that serializes hash chain reads + writes across concurrent useai_end calls. */
   chainLock: ChainLock;
@@ -188,6 +196,7 @@ export function createChildContext(
     promptId: `prompt_${randomUUID()}`,
     connectionId: parent.connectionId,
     ...(parent.mcpClientName && { mcpClientName: parent.mcpClientName }),
+    ...(parent.isStdio && { isStdio: true }),
     prevHash: "", // resolved at seal time from ctx.prevHash — not used at spawn
     chainLock: parent.chainLock, // children share the parent's lock — same chain head
     startedAt: now,

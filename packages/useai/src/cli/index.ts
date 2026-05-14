@@ -56,8 +56,7 @@ program.action(async () => {
   );
   // Setup runs whenever any detected AI tool is missing useai, so new tools
   // installed after the first onboarding are picked up on the next `useai` run.
-  const allConfigured =
-    detected.length > 0 && configuredFlags.every(Boolean);
+  const allConfigured = detected.length > 0 && configuredFlags.every(Boolean);
   const needsSetup = !hasKeystore || !allConfigured;
 
   if (needsSetup) {

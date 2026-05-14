@@ -10,6 +10,7 @@ import {
 import { coerceJsonString } from "../core/coerce.js";
 import { registerActiveSession } from "../daemon/core/active-sessions.js";
 import { recordActivity } from "../daemon/core/connection-store.js";
+import { notifyDaemonRegister } from "../daemon/core/active-sessions-client.js";
 
 export function registerStartTool(server: McpServer, ctx: PromptContext): void {
   server.registerTool(
@@ -109,7 +110,7 @@ export function registerStartTool(server: McpServer, ctx: PromptContext): void {
         // Register the concurrent child so it shows on /health.active_sessions
         // and gates the auto-updater's restart. We don't want to restart the
         // daemon while any session is in flight, regardless of nesting depth.
-        registerActiveSession({
+        const childRecord = {
           promptId: child.promptId,
           connectionId: child.connectionId,
           client: child.client,
@@ -118,7 +119,15 @@ export function registerStartTool(server: McpServer, ctx: PromptContext): void {
           startedAt: child.startedAt!.getTime(),
           parentPromptId: ctx.promptId,
           sessionDepth: child.sessionDepth,
-        });
+        };
+        registerActiveSession(childRecord);
+        // Stdio runs out-of-process from the daemon, so the local
+        // registerActiveSession above only updates this process's Map.
+        // Mirror the entry into the daemon's registry over HTTP so
+        // /health.active_sessions and the idle gate see it too.
+        if (ctx.isStdio) {
+          void notifyDaemonRegister(childRecord);
+        }
 
         return {
           content: [
@@ -135,7 +144,8 @@ export function registerStartTool(server: McpServer, ctx: PromptContext): void {
       ctx.startedAt = new Date();
       ctx.lastActivityTime = null;
       ctx.idleMs = 0;
-      ctx.activeSegments = [[ctx.startedAt.getTime(), 0]];
+      // In ms, start, end time
+      ctx.activeSegments = [[ctx.startedAt.getTime(), ctx.startedAt.getTime()]];
       ctx.childPausedMs = 0;
       ctx.sessionDepth = 0;
       ctx.concurrentChildren = new Map();
@@ -151,7 +161,7 @@ export function registerStartTool(server: McpServer, ctx: PromptContext): void {
       // Root session is now active — register so it shows on /health and the
       // auto-updater's idle gate fires so the daemon won't try to self-restart
       // while work is in progress.
-      registerActiveSession({
+      const rootRecord = {
         promptId: ctx.promptId,
         connectionId: ctx.connectionId,
         client: ctx.client,
@@ -160,7 +170,14 @@ export function registerStartTool(server: McpServer, ctx: PromptContext): void {
         startedAt: ctx.startedAt.getTime(),
         parentPromptId: null,
         sessionDepth: 0,
-      });
+      };
+      registerActiveSession(rootRecord);
+      // Mirror into the daemon's registry when running out-of-process
+      // (stdio). HTTP transport already runs inside the daemon, so the
+      // local register above is sufficient there.
+      if (ctx.isStdio) {
+        void notifyDaemonRegister(rootRecord);
+      }
 
       return {
         content: [

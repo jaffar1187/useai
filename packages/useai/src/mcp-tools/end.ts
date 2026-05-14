@@ -37,6 +37,7 @@ import {
 import { coerceJsonString } from "../core/coerce.js";
 import { unregisterActiveSession } from "../daemon/core/active-sessions.js";
 import { recordActivity } from "../daemon/core/connection-store.js";
+import { notifyDaemonUnregister } from "../daemon/core/active-sessions-client.js";
 
 let privateKey: Buffer | null = null;
 async function getPrivateKey(): Promise<Buffer> {
@@ -328,6 +329,12 @@ export function registerEndTool(server: McpServer, ctx: PromptContext): void {
       // Do this after the chain lock so a failed seal (which throws above)
       // doesn't drop the entry early.
       unregisterActiveSession(targetCtx.promptId);
+      // Stdio runs out-of-process; tell the daemon to drop its mirror so
+      // /health.active_sessions decrements immediately rather than waiting
+      // for the 12-min stale sweeper.
+      if (ctx.isStdio) {
+        void notifyDaemonUnregister(targetCtx.promptId);
+      }
 
       // A child session is any targetCtx that is not the root ctx itself.
       // This covers both sessions still in concurrentChildren and orphaned sessions

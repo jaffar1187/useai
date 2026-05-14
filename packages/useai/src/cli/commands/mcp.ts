@@ -7,7 +7,10 @@ import { registerTools } from "../../mcp-tools/mcp-tools.js";
 import { createPromptContext } from "../../core/prompt-context.js";
 
 declare const __VERSION__: string | undefined;
-const VERSION = typeof __VERSION__ !== "undefined" ? __VERSION__ : "latest";
+// Fallback to "dev" (not "latest") so it matches the cli/index.ts sentinel.
+// installer.ts uses VERSION === "dev" to switch from `npx -y @devness/useai@…`
+// to a direct `node <local cli.js>` command for stdio tools.
+const VERSION = typeof __VERSION__ !== "undefined" ? __VERSION__ : "dev";
 
 async function runStdioMcpServer(): Promise<void> {
   const promptContext = createPromptContext();
@@ -18,6 +21,11 @@ async function runStdioMcpServer(): Promise<void> {
   // shared connectionId, so prompts from the same IDE launch (e.g. one
   // OpenCode session) group together — mirroring HTTP transport semantics.
   promptContext.connectionId = randomUUID();
+  // We're in a separate process from the daemon. Tag the context so
+  // useai_start/heartbeat/end also notify the daemon over HTTP — without
+  // that, /health.active_sessions never sees stdio sessions because the
+  // daemon's in-memory registry lives in a different process.
+  promptContext.isStdio = true;
   const server = new McpServer(
     { name: "useai", version: VERSION },
     { instructions: INSTRUCTIONS_TEXT },
