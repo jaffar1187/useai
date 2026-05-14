@@ -460,11 +460,23 @@ export function getAutostartPlatform(): AutostartPlatform | null {
  * `useai daemon-run` with no visible console window on every logon.
  *
  * Idempotent: re-running re-applies the latest plist/unit/script content.
+ *
+ * Skipped in dev mode (VERSION === "dev") on every platform — when running
+ * from a local tsc build, you start/stop the daemon manually and don't
+ * want the OS auto-restarting a process tied to a specific source tree.
+ * Any previously-installed autostart artifact is removed so a stale unit
+ * (e.g. the broken `@devness/useai@dev` one from earlier) doesn't fight
+ * us in the background.
  */
 export function installAutostart(): void {
   const platform = getAutostartPlatform();
   if (!platform)
     throw new Error(`Autostart not supported on ${process.platform}`);
+
+  if (VERSION === "dev") {
+    uninstallAutostart();
+    return;
+  }
 
   if (platform === "darwin") {
     installMacos();
