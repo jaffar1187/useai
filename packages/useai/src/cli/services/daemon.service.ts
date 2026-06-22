@@ -5,7 +5,7 @@ import {
   unlinkSync,
   openSync,
 } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import { DAEMON_PID_FILE, DAEMON_LOG_FILE } from "@devness/useai-storage/paths";
 import { getDaemonUrl } from "@devness/useai-storage/config";
 
@@ -95,9 +95,46 @@ export function startDaemonProcess(): void {
   }
 }
 
+/**
+ * Verify a PID actually belongs to our daemon before signaling it.
+ *
+ * After a SIGKILL or OOM kill, the daemon's PID file is left behind with
+ * a stale PID. The kernel later recycles that PID for some other process
+ * (a browser tab, editor, whatever). Without this check, `stopDaemonProcess`
+ * would happily `kill` that unrelated process. We inspect the running
+ * process's command line and only proceed if it actually looks like our
+ * `useai ... daemon-run` invocation.
+ */
+function isOurDaemonPid(pid: number): boolean {
+  try {
+    const out =
+      process.platform === "win32"
+        ? execSync(
+            `wmic process where ProcessId=${pid} get CommandLine /value`,
+            { stdio: ["ignore", "pipe", "ignore"], encoding: "utf-8" },
+          )
+        : execSync(`ps -p ${pid} -o args=`, {
+            stdio: ["ignore", "pipe", "ignore"],
+            encoding: "utf-8",
+          });
+    return /useai/i.test(out) && /daemon-run/i.test(out);
+  } catch {
+    // ps / wmic exit non-zero when the PID isn't running — that's a clear
+    // "not our daemon" answer.
+    return false;
+  }
+}
+
 export function stopDaemonProcess(): boolean {
   const pid = readPid();
   if (!pid) return false;
+  if (!isOurDaemonPid(pid)) {
+    // Stale PID file (daemon was SIGKILLed or OOM-killed) or the PID has
+    // been recycled to an unrelated process. Don't signal it. Just drop
+    // the stale file so a fresh start writes a clean one.
+    if (existsSync(DAEMON_PID_FILE)) unlinkSync(DAEMON_PID_FILE);
+    return false;
+  }
   try {
     process.kill(pid, "SIGTERM");
     if (existsSync(DAEMON_PID_FILE)) unlinkSync(DAEMON_PID_FILE);

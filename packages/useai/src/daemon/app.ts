@@ -30,7 +30,9 @@ function writePidFile(): void {
 function clearPidFile(): void {
   try {
     if (existsSync(DAEMON_PID_FILE)) unlinkSync(DAEMON_PID_FILE);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -45,10 +47,15 @@ function installSignalHandlers(): void {
     process.exit(0);
   };
 
+  // Graceful os shutdown handling
   process.on("SIGTERM", shutdown);
+  // SIGINT is sent when the user presses ``Ctrl+C`` in the terminal
   process.on("SIGINT", shutdown);
+  // SIGHUP is sent when the terminal is ``closed`` directly.
   process.on("SIGHUP", shutdown);
+  // Node sent event on exist, It call process.exit externally
   process.on("exit", clearPidFile);
+  //SIGKILL can be registered but it will never fire, so not needed here
 }
 
 /**
@@ -181,7 +188,10 @@ export async function startDaemon(): Promise<void> {
  * message — better than letting the rejection bubble out unhandled and
  * leaving launchd/systemd to retry every 10 seconds forever.
  */
-async function listenWithRetry(app: Hono, preferred: number | undefined): Promise<number> {
+async function listenWithRetry(
+  app: Hono,
+  preferred: number | undefined,
+): Promise<number> {
   const firstPort = await resolveDaemonPort(preferred);
   try {
     return await listen(app, firstPort);

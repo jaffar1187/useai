@@ -34,12 +34,6 @@ export async function createMcpConnection(): Promise<WebStandardStreamableHTTPSe
       const pingInterval = setInterval(() => {
         const conn = connections.get(connectionId);
         if (!conn) return;
-        // Skip the probe if a useai tool ran recently — the transport is
-        // proven alive by that traffic. Sending a competing `ping` while
-        // the agent is actively using the connection has been observed to
-        // race and tear down the session, breaking mid-conversation
-        // `useai_end` calls with a 404.
-        if (Date.now() - conn.lastActivityAt < PING_INTERVAL_MS) return;
         server.server.ping().catch(() => {
           clearInterval(pingInterval);
           connections.delete(promptContext.connectionId!);

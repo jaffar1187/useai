@@ -277,22 +277,29 @@ function installLinux(): void {
   const servicePath = buildServicePath();
 
   //npx path and /bin path. and create the launch/restart script.
+  //Create ``useai-daemon`` launcher script, which runs the daemon-run command
   writeLauncher(npxPath, servicePath);
 
   mkdirSync(dirname(SYSTEMD_UNIT_PATH), { recursive: true });
+  // Crash handling when laptop is on.
+  // creates ``useai-daemon.service``
+  // File ran is ``useai-daemon.service`` which internally runs the launcher script i.e ``useai-daemon``
+  // In case daemon exits, while logged in only then this take cares of spinning it again
   writeFileSync(SYSTEMD_UNIT_PATH, systemdUnit(), "utf-8");
 
   try {
-    //resets the resetCount no.
+    //resets the resetCount number i.e no. of crashes wrt crash handling.
     execSync(`systemctl --user reset-failed ${SYSTEMD_UNIT_NAME}`, {
       stdio: "ignore",
     });
   } catch {
     /* ignore */
   }
-  //Re-read the fresh unit files.
+  //Re-read the fresh unit files, the daemon-reload refers to os, nothing related to useai daemon.
   execSync("systemctl --user daemon-reload", { stdio: "ignore" });
-  //Run daemon launcher script
+  // Laptop restart handling.
+  //Run daemon launcher script, and also creates a link, which on reboot os pickups and spawns the daemon.
+  // File ran is ``useai-daemon.service`` which internally runs the launcher script i.e ``useai-daemon``
   execSync(`systemctl --user enable --now ${SYSTEMD_UNIT_NAME}`, {
     stdio: "ignore",
   });
